@@ -7,6 +7,11 @@ license.workspace = true
 
 [dependencies]
 clap.workspace = true
+jiff.workspace = true
+md-5.workspace = true
 media-core.workspace = true
-serde.workspace = true
+rand.workspace = true
+regex.workspace = true
 serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
