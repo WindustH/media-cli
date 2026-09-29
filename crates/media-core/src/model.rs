@@ -124,6 +124,15 @@ pub struct Media {
   pub duration: Option<f64>,
   #[serde(skip_serializing_if = "Option::is_none")]
   pub alt: Option<String>,
+  /// Bytes of `url` / `audio_url`, when the platform says.
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub size: Option<u64>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub audio_size: Option<u64>,
+  /// URL query parameter the host takes byte ranges in (`range=a-b`) instead
+  /// of the `Range` header; downloads then need `size` / `audio_size`.
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub range_param: Option<String>,
 }
 
 impl Media {
@@ -136,6 +145,9 @@ impl Media {
       height: None,
       duration: None,
       alt: None,
+      size: None,
+      audio_size: None,
+      range_param: None,
     }
   }
 

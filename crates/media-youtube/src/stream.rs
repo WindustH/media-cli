@@ -3,11 +3,9 @@
 //! then serves was measured (2026-09):
 //!
 //! - without a range, a stream comes at about playback speed, and large ones
-//!   are refused (403); a `range=` of up to 20 MB comes at full speed. The
-//!   shared downloader fetches each file in one request, so streams get a
-//!   `range` covering the whole file and, when the best one is larger, the
-//!   best one within that limit is taken, with a note (chunked downloads need
-//!   media-core support);
+//!   are refused (403); `range=a-b` URL parameters come at full speed (a
+//!   `Range` header gets an HLS playlist instead), so streams carry their size
+//!   and `range_param`, and media-core fetches them in chunks;
 //! - for some videos, clients without a proof-of-origin token get only the
 //!   first megabyte (403 after it), so the end of each stream is probed.
 //!
@@ -17,31 +15,20 @@
 
 use std::process::Stdio;
 
-use media_core::output::note;
-use media_core::text::fmt_count;
 use media_core::{Error, ErrorCode, Media, MediaKind, Post, Result, Value, ValueExt};
 
 use crate::api::{self, Api};
 use crate::{parse, refs, video};
 
-/// Largest stream fetched in one request.
-const ONE_REQUEST: u64 = 20 << 20;
+/// googlevideo takes byte ranges as this URL parameter.
+const RANGE_PARAM: &str = "range";
 
 fn size(f: &Value) -> Option<u64> {
   f.u64("contentLength")
 }
 
-fn fits(f: &Value) -> bool {
-  size(f).is_some_and(|n| n <= ONE_REQUEST)
-}
-
-/// The stream URL asking for the whole file as one range.
-fn ranged(f: &Value) -> Option<String> {
-  let url = f.str("url")?;
-  Some(match size(f).filter(|n| *n > 0) {
-    Some(n) => format!("{url}&range=0-{}", n - 1),
-    None => url,
-  })
+fn url(f: &Value) -> Option<String> {
+  f.str("url")
 }
 
 fn mime(f: &Value) -> String {
@@ -58,27 +45,6 @@ fn codec(f: &Value) -> u8 {
   } else {
     1
   }
-}
-
-/// The first format that fits one request, noting when better ones did not.
-fn first_fitting<'a>(ranked: &[&'a Value], what: &str) -> Option<&'a Value> {
-  let best = *ranked.first()?;
-  let pick = ranked.iter().copied().find(|f| fits(f))?;
-  if !std::ptr::eq(pick, best) {
-    let label = |f: &Value| {
-      let size = fmt_count(size(f).unwrap_or(0));
-      match f.u64("height") {
-        Some(h) => format!("{h}p ({size}B)"),
-        None => format!("{} kbps ({size}B)", f.u64("bitrate").unwrap_or(0) / 1000),
-      }
-    };
-    note(&format!(
-      "{what}: took {} instead of {}; larger YouTube streams need chunked downloads",
-      label(pick),
-      label(best)
-    ));
-  }
-  Some(pick)
 }
 
 /// Best video (highest resolution, then codec) with the best audio (original
@@ -114,22 +80,18 @@ fn streams(v: &Value, audio_only: bool) -> Result<Vec<Media>> {
       f.u64("bitrate").unwrap_or(0),
     ))
   });
-  let too_big = || {
-    Error::new(
-      ErrorCode::UnsupportedOperation,
-      "every stream of this video is larger than YouTube sends in one request (20 MB)",
-    )
-    .with_hint("media-cli's downloader does not fetch in chunks yet; yt-dlp does")
-  };
-  let a = first_fitting(&audio, "audio");
+  let none = || Error::new(ErrorCode::UpstreamError, "YouTube listed no direct streams");
+  let a = audio.first().copied();
   if audio_only {
-    let a = a.ok_or_else(too_big)?;
+    let a = a.ok_or_else(none)?;
     return Ok(vec![Media {
       duration,
-      ..Media::new(MediaKind::Audio, ranged(a).unwrap_or_default())
+      size: size(a),
+      range_param: Some(RANGE_PARAM.into()),
+      ..Media::new(MediaKind::Audio, url(a).unwrap_or_default())
     }]);
   }
-  let (f, a) = match (first_fitting(&videos, "video"), a) {
+  let (f, a) = match (videos.first().copied(), a) {
     (Some(f), Some(a)) => (f, Some(a)),
     // No split streams: the best muxed (audio + video) format.
     _ => {
@@ -139,15 +101,18 @@ fn streams(v: &Value, audio_only: bool) -> Result<Vec<Media>> {
         .filter(|f| f.str("url").is_some())
         .collect();
       muxed.sort_by_key(|f| std::cmp::Reverse(f.u64("height").unwrap_or(0)));
-      (first_fitting(&muxed, "video").ok_or_else(too_big)?, None)
+      (muxed.first().copied().ok_or_else(none)?, None)
     }
   };
   Ok(vec![Media {
-    audio_url: a.and_then(ranged),
+    audio_url: a.and_then(url),
+    size: size(f),
+    audio_size: a.and_then(size),
+    range_param: Some(RANGE_PARAM.into()),
     width: f.u64("width").map(|w| w as u32),
     height: f.u64("height").map(|h| h as u32),
     duration,
-    ..Media::video(ranged(f).unwrap_or_default())
+    ..Media::video(url(f).unwrap_or_default())
   }])
 }
 
@@ -173,7 +138,7 @@ pub async fn media(api: &Api, post: &str, audio_only: bool) -> Result<(Post, Vec
       Error::new(ErrorCode::UpstreamError, "YouTube listed no direct streams")
     }
     Ok(media) => {
-      if !refused(api, &media).await {
+      if !refused(api, &v, &media).await {
         return Ok((p, media));
       }
       Error::new(
@@ -196,26 +161,26 @@ pub async fn media(api: &Api, post: &str, audio_only: bool) -> Result<(Post, Vec
 /// Whether googlevideo refuses the end of a stream. Without a proof-of-origin
 /// token it serves some videos' streams only up to the first megabyte (403
 /// after that), so the last kilobyte of each stream is asked for first.
-async fn refused(api: &Api, media: &[Media]) -> bool {
-  let urls = media
+async fn refused(api: &Api, v: &Value, media: &[Media]) -> bool {
+  let formats = v
+    .list("streamingData.adaptiveFormats")
     .iter()
-    .flat_map(|m| std::iter::once(&m.url).chain(m.audio_url.as_ref()));
-  for url in urls {
-    // `…&range=0-<last byte>` as [`ranged`] wrote it.
-    let Some((base, last)) = url
-      .rsplit_once("&range=0-")
-      .and_then(|(b, l)| Some((b, l.parse::<u64>().ok()?)))
-    else {
+    .chain(v.list("streamingData.formats"));
+  let chosen: Vec<&str> = media
+    .iter()
+    .flat_map(|m| std::iter::once(m.url.as_str()).chain(m.audio_url.as_deref()))
+    .collect();
+  for f in formats {
+    let (Some(u), Some(last)) = (url(f), size(f).map(|n| n.saturating_sub(1))) else {
       continue;
     };
-    if last < 1 << 20 {
+    if last < 1 << 20 || !chosen.contains(&u.as_str()) {
       continue;
     }
-    let probe = format!("{base}&range={}-{last}", last - 1023);
     let resp = api
       .ctx
       .http
-      .get(probe)
+      .get(format!("{u}&{RANGE_PARAM}={}-{last}", last - 1023))
       .no_cookies()
       .no_throttle()
       .send()
@@ -229,10 +194,11 @@ async fn refused(api: &Api, media: &[Media]) -> bool {
 
 /// Stream URLs from `yt-dlp -J`; `None` when yt-dlp is not installed.
 async fn yt_dlp(id: &str, audio_only: bool) -> Result<Option<Vec<Media>>> {
+  // Plain https files only: the best formats are often HLS playlists.
   let format = if audio_only {
-    "bestaudio[ext=m4a][filesize<20M]/bestaudio[filesize<20M]/bestaudio"
+    "bestaudio[ext=m4a][protocol=https]/bestaudio[protocol=https]"
   } else {
-    "bestvideo[filesize<20M]+bestaudio[ext=m4a][filesize<20M]/best[filesize<20M]/best"
+    "bestvideo[protocol=https]+bestaudio[ext=m4a][protocol=https]/best[protocol=https]"
   };
   let run = tokio::process::Command::new("yt-dlp")
     .args(["--no-warnings", "--no-playlist", "-J", "-f", format])
@@ -250,20 +216,17 @@ async fn yt_dlp(id: &str, audio_only: bool) -> Result<Option<Vec<Media>>> {
   }
   let v: Value = serde_json::from_slice(&out.stdout)?;
   let duration = v.f64("duration");
-  // googlevideo URLs get the same whole-file range as ours.
-  let url = |f: &Value| {
-    let u = f.str("url").unwrap_or_default();
-    match f.u64("filesize").filter(|n| (1..=ONE_REQUEST).contains(n)) {
-      Some(n) if u.contains(".googlevideo.com/") => format!("{u}&range=0-{}", n - 1),
-      _ => u,
-    }
-  };
+  let url = |f: &Value| f.str("url").unwrap_or_default();
+  let google = |f: &Value| url(f).contains(".googlevideo.com/") && f.u64("filesize").is_some();
   let media = match v.list("requested_formats") {
     [video, audio] => Media {
       audio_url: Some(url(audio)).filter(|u| !u.is_empty()),
       width: video.u64("width").map(|w| w as u32),
       height: video.u64("height").map(|h| h as u32),
       duration,
+      size: video.u64("filesize"),
+      audio_size: audio.u64("filesize"),
+      range_param: (google(video) && google(audio)).then(|| RANGE_PARAM.into()),
       ..Media::video(url(video))
     },
     _ => {
@@ -274,6 +237,8 @@ async fn yt_dlp(id: &str, audio_only: bool) -> Result<Option<Vec<Media>>> {
       };
       Media {
         duration,
+        size: v.u64("filesize"),
+        range_param: google(&v).then(|| RANGE_PARAM.into()),
         ..Media::new(kind, url(&v))
       }
     }

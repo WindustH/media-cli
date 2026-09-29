@@ -94,7 +94,9 @@ with `--cursor`. `--limit/-n` follows pages automatically; a cursor ending in
 counters such as `coins`, `danmaku`, `quotes`.
 
 `media`: `kind` (`image`, `video`, `audio`, `gif`), `url`, `audio_url` (separate
-audio track), `width`, `height`, `duration` (seconds), `alt`.
+audio track), `width`, `height`, `duration` (seconds), `alt`, `size` /
+`audio_size` (bytes) and `range_param` (the URL parameter a host takes byte
+ranges in, when it does not honour the `Range` header).
 
 **User**: `id`, `name`, `handle`, `url`, `avatar`, `bio`, `verified`,
 `location`, `stats` (`followers`, `following`, `posts`, `likes`, ...),

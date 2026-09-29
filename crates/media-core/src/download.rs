@@ -3,9 +3,10 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::time::Duration;
 
 use indicatif::{ProgressBar, ProgressStyle};
-use tokio::io::AsyncReadExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use crate::ctx::Ctx;
 use crate::error::{Error, Result};
@@ -138,7 +139,40 @@ async fn fix_extension(path: PathBuf) -> PathBuf {
   }
 }
 
-async fn fetch(ctx: &Ctx, referer: &str, url: &str, path: &Path) -> Result<u64> {
+/// Bytes per ranged request: large files come as a series of these, each with
+/// its own timeout and retries (some CDNs also throttle or refuse unranged
+/// downloads of big files).
+const CHUNK: u64 = 8 << 20;
+const CHUNK_TIMEOUT: Duration = Duration::from_secs(120);
+
+/// How to fetch one file: its size and how its host takes byte ranges.
+#[derive(Clone, Copy)]
+struct Source<'a> {
+  url: &'a str,
+  size: Option<u64>,
+  range_param: Option<&'a str>,
+}
+
+impl<'a> Source<'a> {
+  fn video(m: &'a Media) -> Self {
+    Self {
+      url: &m.url,
+      size: m.size,
+      range_param: m.range_param.as_deref(),
+    }
+  }
+
+  fn audio(m: &'a Media) -> Option<Self> {
+    let url = m.audio_url.as_deref()?;
+    Some(Self {
+      url,
+      size: m.audio_size,
+      range_param: m.range_param.as_deref(),
+    })
+  }
+}
+
+async fn fetch(ctx: &Ctx, referer: &str, src: Source<'_>, path: &Path) -> Result<u64> {
   let label = path
     .file_name()
     .map(|f| f.to_string_lossy().into_owned())
@@ -151,36 +185,111 @@ async fn fetch(ctx: &Ctx, referer: &str, url: &str, path: &Path) -> Result<u64> 
     .unwrap_or_else(|_| ProgressStyle::default_bar()),
   );
   bar.set_message(label);
-  let result = ctx
-    .http
-    .get(url)
-    .header("referer", referer)
-    .header("accept", "*/*")
-    .no_cookies()
-    .no_throttle()
-    .retries(2)
-    .save_to(path, |done, total| {
-      if let Some(t) = total {
-        bar.set_length(t);
-      }
-      bar.set_position(done);
-    })
-    .await;
+  let result = match (src.range_param, src.size) {
+    (Some(param), Some(size)) => {
+      fetch_by_param(ctx, referer, src.url, param, size, path, &bar).await
+    }
+    _ => fetch_ranged(ctx, referer, src.url, path, &bar).await,
+  };
   bar.finish_and_clear();
   result
 }
 
+/// Chunks as `url&param=a-b`, for hosts (googlevideo) that take ranges in the
+/// URL and answer a `Range` header with something else.
+async fn fetch_by_param(
+  ctx: &Ctx,
+  referer: &str,
+  url: &str,
+  param: &str,
+  size: u64,
+  path: &Path,
+  bar: &ProgressBar,
+) -> Result<u64> {
+  bar.set_length(size);
+  let sep = if url.contains('?') { '&' } else { '?' };
+  let mut file = tokio::fs::File::create(path).await?;
+  let mut done = 0;
+  while done < size {
+    let to = (done + CHUNK).min(size) - 1;
+    let got = ctx
+      .http
+      .get(format!("{url}{sep}{param}={done}-{to}"))
+      .header("referer", referer)
+      .header("accept", "*/*")
+      .no_cookies()
+      .no_throttle()
+      .retries(2)
+      .timeout(CHUNK_TIMEOUT)
+      .append_to(&mut file, |n| bar.inc(n))
+      .await?;
+    if got.bytes == 0 {
+      return Err(Error::network(format!(
+        "the server sent nothing for bytes {done}-{to}"
+      )));
+    }
+    done += got.bytes;
+  }
+  file.flush().await?;
+  Ok(done)
+}
+
+/// Ask for the first chunk; a `206` with the file size continues chunk by
+/// chunk, a `200` (ranges ignored) already carried the whole file.
+async fn fetch_ranged(
+  ctx: &Ctx,
+  referer: &str,
+  url: &str,
+  path: &Path,
+  bar: &ProgressBar,
+) -> Result<u64> {
+  let chunk = |from: u64, to: u64| {
+    ctx
+      .http
+      .get(url)
+      .header("referer", referer)
+      .header("accept", "*/*")
+      .header("range", format!("bytes={from}-{to}"))
+      .no_cookies()
+      .no_throttle()
+      .retries(2)
+      .timeout(CHUNK_TIMEOUT)
+  };
+  let mut file = tokio::fs::File::create(path).await?;
+  let first = chunk(0, CHUNK - 1)
+    .append_to(&mut file, |n| bar.inc(n))
+    .await?;
+  let mut done = first.bytes;
+  if first.status == wreq::StatusCode::PARTIAL_CONTENT
+    && let Some(total) = first.range_total()
+  {
+    bar.set_length(total);
+    while done < total {
+      let to = (done + CHUNK).min(total) - 1;
+      let got = chunk(done, to).append_to(&mut file, |n| bar.inc(n)).await?;
+      if got.bytes == 0 {
+        return Err(Error::network(format!(
+          "the server sent nothing for bytes {done}-{to}"
+        )));
+      }
+      done += got.bytes;
+    }
+  }
+  file.flush().await?;
+  Ok(done)
+}
+
 async fn full(ctx: &Ctx, referer: &str, m: &Media, dir: &Path, name: &str) -> Result<PathBuf> {
   let out = dir.join(format!("{name}.{}", extension(&m.url, m.kind)));
-  let Some(audio_url) = &m.audio_url else {
-    fetch(ctx, referer, &m.url, &out).await?;
+  let Some(audio_src) = Source::audio(m) else {
+    fetch(ctx, referer, Source::video(m), &out).await?;
     return Ok(fix_extension(out).await);
   };
   let out = dir.join(format!("{name}.mp4"));
   let video = dir.join(format!("{name}.video.m4s"));
   let audio = dir.join(format!("{name}.audio.m4s"));
-  fetch(ctx, referer, &m.url, &video).await?;
-  fetch(ctx, referer, audio_url, &audio).await?;
+  fetch(ctx, referer, Source::video(m), &video).await?;
+  fetch(ctx, referer, audio_src, &audio).await?;
   if !has_ffmpeg().await {
     note("ffmpeg not found: kept the separate video and audio tracks");
     return Ok(video);
@@ -202,16 +311,12 @@ async fn full(ctx: &Ctx, referer: &str, m: &Media, dir: &Path, name: &str) -> Re
 
 async fn audio(ctx: &Ctx, referer: &str, m: &Media, dir: &Path, name: &str) -> Result<PathBuf> {
   let out = dir.join(format!("{name}.m4a"));
-  if let Some(url) = m
-    .audio_url
-    .as_deref()
-    .or((m.kind == MediaKind::Audio).then_some(m.url.as_str()))
-  {
-    fetch(ctx, referer, url, &out).await?;
+  if let Some(src) = Source::audio(m).or((m.kind == MediaKind::Audio).then(|| Source::video(m))) {
+    fetch(ctx, referer, src, &out).await?;
     return Ok(out);
   }
   let video = dir.join(format!("{name}.source.{}", extension(&m.url, m.kind)));
-  fetch(ctx, referer, &m.url, &video).await?;
+  fetch(ctx, referer, Source::video(m), &video).await?;
   require_ffmpeg().await?;
   ffmpeg(&[
     "-i".as_ref(),

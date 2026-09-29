@@ -7,7 +7,6 @@
 
 use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;
-use std::path::Path;
 use std::time::{Duration, Instant};
 
 use futures_util::StreamExt;
@@ -131,6 +130,7 @@ impl Http {
       cookies: true,
       throttle: true,
       retries,
+      timeout: None,
     }
   }
 
@@ -291,6 +291,7 @@ pub struct Req<'a> {
   cookies: bool,
   throttle: bool,
   retries: u32,
+  timeout: Option<Duration>,
 }
 
 impl<'a> Req<'a> {
@@ -379,6 +380,12 @@ impl<'a> Req<'a> {
     self
   }
 
+  /// Timeout of this request instead of the client's (`--timeout`).
+  pub fn timeout(mut self, timeout: Duration) -> Self {
+    self.timeout = Some(timeout);
+    self
+  }
+
   fn full_url(&self) -> Result<String> {
     if self.query.is_empty() {
       return Ok(self.url.clone());
@@ -404,6 +411,9 @@ impl<'a> Req<'a> {
       }
     }
     let mut rb = self.http.client.request(self.method.clone(), url);
+    if let Some(t) = self.timeout {
+      rb = rb.timeout(t);
+    }
     match &self.body {
       Body::Empty => {}
       Body::Bytes(data, ct) => {
@@ -508,29 +518,32 @@ impl<'a> Req<'a> {
     self.send().await?.check()?.value()
   }
 
-  /// Stream the response body into `path`; `progress(done, total)` is called per chunk.
-  pub async fn save_to(
+  /// Stream a successful response's body onto the end of `file`, calling
+  /// `progress(bytes)` per chunk; the status and headers come back with the count.
+  pub async fn append_to(
     self,
-    path: &Path,
-    mut progress: impl FnMut(u64, Option<u64>),
-  ) -> Result<u64> {
+    file: &mut tokio::fs::File,
+    mut progress: impl FnMut(u64),
+  ) -> Result<Fetched> {
     let resp = self.execute().await?;
     let status = resp.status();
     if !status.is_success() {
       return Err(status_error(status, ""));
     }
-    let total = resp.content_length();
-    let mut file = tokio::fs::File::create(path).await?;
-    let mut done = 0u64;
+    let headers = resp.headers().clone();
+    let mut bytes = 0u64;
     let mut stream = resp.bytes_stream();
     while let Some(chunk) = stream.next().await {
       let chunk = chunk.map_err(|e| Error::network(e.to_string()))?;
       file.write_all(&chunk).await?;
-      done += chunk.len() as u64;
-      progress(done, total);
+      bytes += chunk.len() as u64;
+      progress(chunk.len() as u64);
     }
-    file.flush().await?;
-    Ok(done)
+    Ok(Fetched {
+      status,
+      headers,
+      bytes,
+    })
   }
 }
 
@@ -543,6 +556,21 @@ async fn backoff(attempt: u32) {
 /// Drop the query string from logged URLs; it may carry tokens.
 fn redact(url: &str) -> &str {
   url.split('?').next().unwrap_or(url)
+}
+
+/// What [`Req::append_to`] wrote.
+pub struct Fetched {
+  pub status: StatusCode,
+  pub headers: HeaderMap,
+  pub bytes: u64,
+}
+
+impl Fetched {
+  /// Size of the whole file from `Content-Range: bytes a-b/total`.
+  pub fn range_total(&self) -> Option<u64> {
+    let v = self.headers.get("content-range")?.to_str().ok()?;
+    v.rsplit('/').next()?.parse().ok()
+  }
 }
 
 /// A fully read response.
