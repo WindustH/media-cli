@@ -1,15 +1,19 @@
 //! Streams to download, from the ANDROID_VR player: its formats carry plain
-//! `url`s (no signature cipher, no `n` parameter to solve, no
-//! proof-of-origin token). A video it cannot play (age-restricted,
-//! members-only, a bot check) falls back to `yt-dlp` when that is on PATH,
-//! which runs YouTube's player code to decipher the web formats.
+//! `url`s (no signature cipher, no `n` parameter to solve). What googlevideo
+//! then serves was measured (2026-09):
 //!
-//! googlevideo throttles a stream fetched without a range to about playback
-//! speed and refuses (403) single requests past some tens of MB; it serves a
-//! `range=` of up to 20 MB (measured) at full speed. The shared downloader
-//! fetches each file in one request, so streams get a `range` covering the
-//! whole file and, when the best one is larger, the best one within that
-//! limit is taken, with a note (chunked downloads need media-core support).
+//! - without a range, a stream comes at about playback speed, and large ones
+//!   are refused (403); a `range=` of up to 20 MB comes at full speed. The
+//!   shared downloader fetches each file in one request, so streams get a
+//!   `range` covering the whole file and, when the best one is larger, the
+//!   best one within that limit is taken, with a note (chunked downloads need
+//!   media-core support);
+//! - for some videos, clients without a proof-of-origin token get only the
+//!   first megabyte (403 after it), so the end of each stream is probed.
+//!
+//! A video the Android client cannot play (age-restricted, members-only, a
+//! bot check) or whose streams are refused falls back to `yt-dlp` when that is
+//! on PATH, which runs YouTube's player code for signatures and tokens.
 
 use std::process::Stdio;
 
@@ -162,25 +166,65 @@ pub async fn media(api: &Api, post: &str, audio_only: bool) -> Result<(Post, Vec
       "download of a live stream (wait for the recording)",
     ));
   }
-  let found = api::playable(&v).and_then(|_| streams(&v, audio_only));
-  match found {
-    Ok(media) if !media.is_empty() => Ok((p, media)),
-    Err(e) if e.code == ErrorCode::UnsupportedOperation => Err(e),
-    other => {
-      let reason = match other {
-        Err(e) => e,
-        Ok(_) => Error::new(ErrorCode::UpstreamError, "YouTube listed no direct streams"),
-      };
-      tracing::debug!("android_vr player: {}; trying yt-dlp", reason.message);
-      match yt_dlp(&id, audio_only).await? {
-        Some(media) => Ok((p, media)),
-        None => Err(reason.with_hint(
-          "install yt-dlp: videos YouTube serves only to its web player (age-restricted, \
-           members-only) need its signature deciphering",
-        )),
+  let reason = match api::playable(&v).and_then(|_| streams(&v, audio_only)) {
+    Err(e) if e.code == ErrorCode::UnsupportedOperation => return Err(e),
+    Err(e) => e,
+    Ok(media) if media.is_empty() => {
+      Error::new(ErrorCode::UpstreamError, "YouTube listed no direct streams")
+    }
+    Ok(media) => {
+      if !refused(api, &media).await {
+        return Ok((p, media));
       }
+      Error::new(
+        ErrorCode::VerificationRequired,
+        "YouTube serves only the first megabyte of this video's streams to clients \
+         without a proof-of-origin token",
+      )
+    }
+  };
+  tracing::debug!("android_vr streams: {}; trying yt-dlp", reason.message);
+  match yt_dlp(&id, audio_only).await? {
+    Some(media) => Ok((p, media)),
+    None => Err(reason.with_hint(
+      "install yt-dlp (with a JavaScript runtime): it produces the tokens and signatures \
+       YouTube's web player uses",
+    )),
+  }
+}
+
+/// Whether googlevideo refuses the end of a stream. Without a proof-of-origin
+/// token it serves some videos' streams only up to the first megabyte (403
+/// after that), so the last kilobyte of each stream is asked for first.
+async fn refused(api: &Api, media: &[Media]) -> bool {
+  let urls = media
+    .iter()
+    .flat_map(|m| std::iter::once(&m.url).chain(m.audio_url.as_ref()));
+  for url in urls {
+    // `…&range=0-<last byte>` as [`ranged`] wrote it.
+    let Some((base, last)) = url
+      .rsplit_once("&range=0-")
+      .and_then(|(b, l)| Some((b, l.parse::<u64>().ok()?)))
+    else {
+      continue;
+    };
+    if last < 1 << 20 {
+      continue;
+    }
+    let probe = format!("{base}&range={}-{last}", last - 1023);
+    let resp = api
+      .ctx
+      .http
+      .get(probe)
+      .no_cookies()
+      .no_throttle()
+      .send()
+      .await;
+    if resp.is_ok_and(|r| r.status.as_u16() == 403) {
+      return true;
     }
   }
+  false
 }
 
 /// Stream URLs from `yt-dlp -J`; `None` when yt-dlp is not installed.
@@ -206,13 +250,21 @@ async fn yt_dlp(id: &str, audio_only: bool) -> Result<Option<Vec<Media>>> {
   }
   let v: Value = serde_json::from_slice(&out.stdout)?;
   let duration = v.f64("duration");
+  // googlevideo URLs get the same whole-file range as ours.
+  let url = |f: &Value| {
+    let u = f.str("url").unwrap_or_default();
+    match f.u64("filesize").filter(|n| (1..=ONE_REQUEST).contains(n)) {
+      Some(n) if u.contains(".googlevideo.com/") => format!("{u}&range=0-{}", n - 1),
+      _ => u,
+    }
+  };
   let media = match v.list("requested_formats") {
     [video, audio] => Media {
-      audio_url: audio.str("url"),
+      audio_url: Some(url(audio)).filter(|u| !u.is_empty()),
       width: video.u64("width").map(|w| w as u32),
       height: video.u64("height").map(|h| h as u32),
       duration,
-      ..Media::video(video.str("url").unwrap_or_default())
+      ..Media::video(url(video))
     },
     _ => {
       let kind = if audio_only {
@@ -222,7 +274,7 @@ async fn yt_dlp(id: &str, audio_only: bool) -> Result<Option<Vec<Media>>> {
       };
       Media {
         duration,
-        ..Media::new(kind, v.str("url").unwrap_or_default())
+        ..Media::new(kind, url(&v))
       }
     }
   };
