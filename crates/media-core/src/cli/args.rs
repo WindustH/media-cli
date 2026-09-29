@@ -32,6 +32,10 @@ pub struct GlobalArgs {
   /// Request timeout in seconds
   #[arg(long, global = true, default_value_t = 30)]
   pub timeout: u64,
+  /// Minimum seconds between requests (random jitter is added); slows bulk
+  /// jobs down, never below the platform's own pacing
+  #[arg(long, global = true, env = "MEDIA_INTERVAL", value_name = "SECS")]
+  pub interval: Option<f64>,
   /// Log requests to stderr
   #[arg(short, long, global = true)]
   pub verbose: bool,

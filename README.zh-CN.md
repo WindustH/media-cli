@@ -123,6 +123,7 @@ media reddit follow r/rust
 
 - `MEDIA_<平台>_COOKIE`（例如 `MEDIA_BILI_COOKIE`）可以临时提供 Cookie 而不保存。
   `--proxy` 或 `HTTPS_PROXY` 让请求走代理。
+- `--interval 5`（或 `MEDIA_INTERVAL=5`）让请求之间至少间隔 5 秒，适合大批量采集。
 - 登录状态保存在 `~/.config/media-cli/<平台>/session.json`（仅本人可读），
   `media <平台> logout` 即可删除。
 - `login --browser` 从本机浏览器（Chrome、Edge、Firefox、Brave 等）读取登录状态。

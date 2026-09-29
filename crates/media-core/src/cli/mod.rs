@@ -142,7 +142,10 @@ async fn execute<P: Platform>(
   let config = HttpConfig {
     proxy: global.proxy.clone(),
     timeout: std::time::Duration::from_secs(global.timeout),
-    min_interval: info.min_interval,
+    min_interval: global
+      .interval
+      .map(|s| std::time::Duration::from_secs_f64(s.max(0.0)))
+      .map_or(info.min_interval, |d| d.max(info.min_interval)),
   };
   let http = Http::new(&config, loaded.session.cookies.clone())?;
   let platform = P::new(Ctx::new(info, http, store, loaded.session.extra.clone()))?;

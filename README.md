@@ -132,6 +132,8 @@ Each platform also answers to shorter names (`bilibili`, `x`, `xiaohongshu`,
 
 - `MEDIA_<PLATFORM>_COOKIE` (for example `MEDIA_BILI_COOKIE`) supplies a cookie
   header without saving it. `--proxy` or `HTTPS_PROXY` routes requests through a proxy.
+- `--interval 5` (or `MEDIA_INTERVAL=5`) spaces requests at least five seconds
+  apart, for large collection jobs.
 - Sessions live in `~/.config/media-cli/<platform>/session.json` (readable by
   you only); `media <platform> logout` removes them.
 - `login --browser` reads the session from a local browser (Chrome, Edge,
