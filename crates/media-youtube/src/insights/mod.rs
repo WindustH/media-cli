@@ -258,16 +258,12 @@ async fn video_report(c: &Client<'_>, arg: &str, days: u32) -> Result<Insights> 
     totals_period: Some("lifetime".into()),
     ..Insights::default()
   };
-  let probe = c
-    .report("views", None, (&published, &to), Some(&id), None, None)
-    .await;
-  if let Err(e) = &probe
-    && e.code == ErrorCode::PermissionDenied
-  {
+  // Reports of other channels' videos come back empty or refused.
+  let mine = c.channel().await?.str("id");
+  if mine.is_none() || meta.str("snippet.channelId") != mine {
     let note = "not a video of the authorized channel: public counters only".to_owned();
     return public(c.api, arg, vec![note]).await;
   }
-  probe?;
   fill(c, &mut ins, (&published, &to), (&start, &to), Some(&id)).await?;
   for b in &mut ins.breakdowns {
     b.period = Some("lifetime".into());
