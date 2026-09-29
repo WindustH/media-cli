@@ -358,7 +358,8 @@ impl<'a> Req<'a> {
     self
   }
 
-  /// Do not send the platform cookies (CDN, object storage, third-party hosts).
+  /// Neither send the platform cookies nor keep the ones the response sets
+  /// (CDN, object storage, third-party hosts, logged-out page fetches).
   pub fn no_cookies(mut self) -> Self {
     self.cookies = false;
     self
@@ -451,7 +452,11 @@ impl<'a> Req<'a> {
             resp.status(),
             started.elapsed().as_millis()
           );
-          self.http.absorb_cookies(&resp);
+          // A request sent without the jar must not write into it either:
+          // a site's guest cookies would replace the session's (X's `ct0`).
+          if self.cookies {
+            self.http.absorb_cookies(&resp);
+          }
           let status = resp.status();
           let retryable = status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error();
           if retryable && attempt < self.retries {
