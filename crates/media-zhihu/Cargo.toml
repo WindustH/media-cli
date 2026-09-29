@@ -9,7 +9,6 @@ license.workspace = true
 base64.workspace = true
 clap.workspace = true
 hmac = "0.12"
-http = "1"
 imagesize = "0.14"
 jiff.workspace = true
 md-5.workspace = true

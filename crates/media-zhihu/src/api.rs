@@ -10,8 +10,7 @@
 //! them the IP is flagged (`40352`). So [`call`] requires a session and only
 //! the hot list and the login flow go through [`call_public`].
 
-use http::Method;
-use media_core::http::Req;
+use media_core::http::{Method, Req};
 use media_core::text::{one_line, truncate};
 use media_core::{Ctx, Error, ErrorCode, Result, Value, ValueExt};
 
@@ -22,14 +21,11 @@ pub const ZHUANLAN: &str = "https://zhuanlan.zhihu.com/api";
 /// The mobile API host; serves the hot list without a login.
 pub const MOBILE: &str = "https://api.zhihu.com";
 
-const LOGIN_HINT: &str = "run `media zhihu login` first";
-
 /// Fail early without the `z_c0` session cookie.
 pub fn need_login(ctx: &Ctx) -> Result<()> {
-  ctx.require_login(&["z_c0"]).map_err(|e| {
-    e.with_hint(format!(
-      "Zhihu serves this to logged-in sessions only; {LOGIN_HINT}"
-    ))
+  ctx.require_login(&["z_c0"]).map_err(|e| Error {
+    message: "Zhihu serves this to logged-in sessions only".into(),
+    ..e
   })
 }
 
@@ -86,23 +82,24 @@ fn error(ctx: &Ctx, status: u16, body: &Value, text: &str) -> Error {
     .first_str(&["error.message", "message"])
     .unwrap_or_else(|| format!("HTTP {status}: {}", truncate(&one_line(text), 200)));
   let logged_in = ctx.http.has_cookie("z_c0");
+  let login_hint = ctx.login_hint();
   let need_login = body.bool("error.need_login") == Some(true);
   match (status, code) {
     (_, Some(40352 | 40362)) => {
       let hint = match body.str("error.redirect") {
         Some(url) if logged_in => format!("pass the check in a browser: {url}"),
-        Some(url) => format!("{LOGIN_HINT}, or pass the check in a browser: {url}"),
-        None => LOGIN_HINT.to_owned(),
+        Some(url) => format!("{login_hint}, or pass the check in a browser: {url}"),
+        None => login_hint,
       };
       Error::new(ErrorCode::VerificationRequired, message).with_hint(hint)
     }
     (_, Some(10003)) if !logged_in => Error::auth(format!(
       "{message} (Zhihu only answers signed x-zse-96 requests anonymously)"
     ))
-    .with_hint(LOGIN_HINT),
+    .with_hint(login_hint.clone()),
     (_, Some(10003)) => Error::new(ErrorCode::SignatureError, message),
-    (401, _) | (_, Some(100 | 101)) => Error::auth(message).with_hint(LOGIN_HINT),
-    _ if need_login => Error::auth(message).with_hint(LOGIN_HINT),
+    (401, _) | (_, Some(100 | 101)) => Error::auth(message).with_hint(login_hint.clone()),
+    _ if need_login => Error::auth(message).with_hint(login_hint.clone()),
     (403, _) => Error::new(ErrorCode::PermissionDenied, message),
     (404, _) => Error::not_found(message),
     (429, _) => Error::new(ErrorCode::RateLimited, message),

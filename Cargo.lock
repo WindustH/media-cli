@@ -1640,6 +1640,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "imagesize"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "09e54e57b4c48b40f7aec75635392b12b3421fa26fe8b4332e63138ed278459c"
+
+[[package]]
 name = "indenter"
 version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2075,10 +2081,19 @@ dependencies = [
 name = "media-zhihu"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "clap",
+ "hmac",
+ "imagesize",
+ "jiff",
+ "md-5",
  "media-core",
- "serde",
+ "rand 0.9.5",
+ "regex",
  "serde_json",
+ "sha1",
+ "tokio",
+ "url",
 ]
 
 [[package]]

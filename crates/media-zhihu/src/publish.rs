@@ -3,8 +3,8 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use http::Method;
 use md5::{Digest, Md5};
+use media_core::http::Method;
 use media_core::{Action, Ctx, Error, Result, Value, ValueExt, json};
 
 use crate::api::{self, MOBILE, V4, WWW, ZHUANLAN};
@@ -34,7 +34,8 @@ impl Image {
 }
 
 async fn upload(ctx: &Ctx, path: &Path, source: &str) -> Result<Image> {
-  let data = tokio::fs::read(path).await?;
+  let file = media_core::file::Image::read(path).await?;
+  let data = file.data;
   let (width, height) = imagesize::blob_size(&data)
     .map(|s| (s.width, s.height))
     .unwrap_or((0, 0));
@@ -50,7 +51,7 @@ async fn upload(ctx: &Ctx, path: &Path, source: &str) -> Result<Image> {
     .ok_or_else(|| Error::upstream("image registration returned no image_id"))?;
   match v.i64("upload_file.state") {
     Some(1) => {} // already known to Zhihu
-    Some(2) => put_object(ctx, &v, data).await?,
+    Some(2) => put_object(ctx, &v, data, file.mime).await?,
     other => return Err(Error::upstream(format!("unexpected image state {other:?}"))),
   }
   let info = poll_image(ctx, &image_id).await?;
@@ -66,7 +67,7 @@ async fn upload(ctx: &Ctx, path: &Path, source: &str) -> Result<Image> {
 }
 
 /// Upload the bytes to Aliyun OSS with the STS token from the registration.
-async fn put_object(ctx: &Ctx, reg: &Value, data: Vec<u8>) -> Result<()> {
+async fn put_object(ctx: &Ctx, reg: &Value, data: Vec<u8>, content_type: &str) -> Result<()> {
   let key = reg
     .str("upload_file.object_key")
     .ok_or_else(|| Error::upstream("image registration returned no object_key"))?;
@@ -81,12 +82,6 @@ async fn put_object(ctx: &Ctx, reg: &Value, data: Vec<u8>) -> Result<()> {
     field("access_key")?,
     field("access_token")?,
   );
-  let content_type = match imagesize::image_type(&data) {
-    Ok(imagesize::ImageType::Png) => "image/png",
-    Ok(imagesize::ImageType::Gif) => "image/gif",
-    Ok(imagesize::ImageType::Webp) => "image/webp",
-    _ => "image/jpeg",
-  };
   let date = jiff::Timestamp::now()
     .strftime("%a, %d %b %Y %H:%M:%S GMT")
     .to_string();
