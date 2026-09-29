@@ -42,6 +42,7 @@ tracing = "0.1"
 url = "2"
 
 [features]
+default = ["browser"]
 # Let `login --browser` read cookies from local browsers.
 browser = ["media-core/browser"]
 
