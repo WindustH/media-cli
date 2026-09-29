@@ -6,14 +6,19 @@ use std::time::Duration;
 
 use media_core::file::Image;
 use media_core::{
-  Action, Collection, Draft, Error, ErrorCode, Page, PageReq, Post, Query, Result, User, Value,
-  ValueExt, json,
+  Action, Collection, Draft, Error, Page, PageReq, Post, Query, Result, User, Value, ValueExt, json,
 };
 
 use crate::api::Client;
 use crate::parse;
 use crate::refs::{self, note_url};
 
+/// Creator-center requests go to edith but come from the creator site.
+const CREATOR_PAGE: [(&str, &str); 2] = [
+  ("origin", crate::api::CREATOR),
+  ("referer", "https://creator.xiaohongshu.com/"),
+];
+const DELETE: &str = "/web_api/sns/capa/postgw/note/delete";
 const PUBLISH: &str = "/web_api/sns/v2/note";
 
 // ── search ──────────────────────────────────────────────────────────────
@@ -124,11 +129,7 @@ pub async fn publish(c: &Client, draft: &Draft) -> Result<Action> {
     .http
     .pause(Duration::from_millis(1000), Duration::from_millis(2500))
     .await;
-  let creator = [
-    ("origin", crate::api::CREATOR),
-    ("referer", "https://creator.xiaohongshu.com/"),
-  ];
-  let data = c.post_with(PUBLISH, &body, &creator).await?;
+  let data = c.post_with(PUBLISH, &body, &CREATOR_PAGE).await?;
   let mut action = Action::done("publish", draft.title.as_deref().unwrap_or("note"));
   if let Some(id) = data.first_str(&["id", "note_id"]) {
     action = action
@@ -179,18 +180,10 @@ async fn upload_image(c: &Client, path: &Path) -> Result<String> {
 pub async fn delete(c: &Client, arg: &str) -> Result<Action> {
   c.require_login()?;
   let id = refs::note_ref(c, arg).await?.id;
-  let body = json!({"note_id": id});
-  match c
-    .creator_post("/api/galaxy/creator/note/delete", &body)
-    .await
-  {
-    Ok(_) => Ok(Action::done("delete", &id)),
-    Err(e) if e.code == ErrorCode::NotFound || e.message.contains("404") => Err(
-      Error::unsupported("delete")
-        .with_hint("the web endpoint for deleting notes is currently unavailable"),
-    ),
-    Err(e) => Err(e),
-  }
+  // The note manager's DELETE_NOTE call (creator center bundle), sent like publishing.
+  c.post_with(DELETE, &json!({"note_id": id}), &CREATOR_PAGE)
+    .await?;
+  Ok(Action::done("delete", &id))
 }
 
 /// One page (0-based) of the creator center note list.
