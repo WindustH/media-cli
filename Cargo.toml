@@ -3,7 +3,7 @@ name = "media-cli"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
-description = "One command line for Zhihu, Xiaohongshu, Twitter/X, Bilibili and Reddit"
+description = "One command line for Zhihu, Xiaohongshu, Twitter/X, Bilibili, Reddit and YouTube"
 
 [[bin]]
 name = "media"
@@ -25,6 +25,7 @@ media-xhs = { path = "crates/media-xhs" }
 media-twitter = { path = "crates/media-twitter" }
 media-bilibili = { path = "crates/media-bilibili" }
 media-reddit = { path = "crates/media-reddit" }
+media-youtube = { path = "crates/media-youtube" }
 
 aes = "0.8"
 base64 = "0.22"
@@ -54,6 +55,7 @@ media-xhs.workspace = true
 media-twitter.workspace = true
 media-bilibili.workspace = true
 media-reddit.workspace = true
+media-youtube.workspace = true
 
 [profile.release]
 lto = "thin"

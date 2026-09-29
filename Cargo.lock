@@ -2033,6 +2033,7 @@ dependencies = [
  "media-reddit",
  "media-twitter",
  "media-xhs",
+ "media-youtube",
  "media-zhihu",
 ]
 
@@ -2111,6 +2112,22 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "media-youtube"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "clap",
+ "jiff",
+ "media-core",
+ "serde",
+ "serde_json",
+ "sha1",
  "tokio",
  "tracing",
  "url",
