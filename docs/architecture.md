@@ -22,7 +22,8 @@ line in `src/main.rs`.
 
 | Module | Role |
 | --- | --- |
-| `platform` | `Platform` trait, `PlatformInfo` (static description), `Cap`, `Choices`, `Ctx`, request types (`PageReq`, `Query`, `Draft`, `QrTicket`) |
+| `platform` | `Platform` trait, `PlatformInfo` (static description), `Cap`, `Choices`, request types (`PageReq`, `Query`, `Draft`, `QrTicket`) |
+| `ctx` | `Ctx`: what a platform works with (HTTP client with the session cookies, files, session extras, login hints, `#N` resolution) |
 | `model` | normalized `Post`, `User`, `Comment`, `Collection`, `Notification`, `Page<T>`, `Action`, `AuthStatus`, `Transcript`, and `Data` (everything a command can print) |
 | `cli` | shared subcommands (`CommonCommand`), per-platform clap command, dispatch to trait methods |
 | `app` | top-level program, `media platforms`, multi-call (`bili` symlink) |
@@ -31,10 +32,11 @@ line in `src/main.rs`.
 | `store` | session file (0600), TTL cache, `#N` short-index lists |
 | `paging` | `collect`: follow cursors until `--limit` items |
 | `download` | save media, merge DASH audio/video, audio-only, WAV segments (ffmpeg) |
+| `file` | format detection by magic bytes, images to upload |
 | `output` | human tables/cards and the `{ok, schema_version, platform, data}` envelope |
 | `json` | `ValueExt`: dotted-path getters tolerant of upstream quirks (`v.str("a.b.0")`, `v.count("stat.like")`) |
 | `text` | counts (`1.2万`), durations, truncation, HTML to text, timestamps |
-| `browser` | optional (`--features browser`): import cookies from local browsers |
+| `browser` | import cookies from local browsers (`browser` feature, on by default) |
 
 ### The Platform contract
 
@@ -62,7 +64,7 @@ A platform crate exports one type implementing `media_core::Platform`:
 2. `cli::execute` loads the session (`MEDIA_<ID>_COOKIE` wins over the saved
    file), builds `Http` with those cookies and calls `P::new(ctx)`.
 3. The shared command maps to a trait method (listings go through `paging::collect`).
-4. Cookies changed by responses are written back to the session file.
+4. Cookies changed by responses are written back to the session file (logged-in sessions only).
 5. Lists are remembered for `#N`; `raw` payloads are dropped unless `--raw`;
    `output` prints a table or the JSON/YAML envelope.
 

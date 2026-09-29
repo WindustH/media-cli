@@ -7,10 +7,10 @@ use std::process::Stdio;
 use indicatif::{ProgressBar, ProgressStyle};
 use tokio::io::AsyncReadExt;
 
+use crate::ctx::Ctx;
 use crate::error::{Error, Result};
 use crate::model::{Downloaded, Media, MediaKind, Post};
 use crate::output::note;
-use crate::platform::Ctx;
 use crate::text::{file_stem, one_line};
 
 #[derive(Debug, Clone)]

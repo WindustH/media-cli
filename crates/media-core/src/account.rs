@@ -7,10 +7,11 @@ use jiff::Timestamp;
 
 use crate::browser;
 use crate::cli::LoginArgs;
+use crate::ctx::Ctx;
 use crate::error::{Error, ErrorCode, Result};
 use crate::model::{Action, AuthStatus, Data};
 use crate::output::note;
-use crate::platform::{Cap, Ctx, Platform, PlatformInfo, QrStatus};
+use crate::platform::{Cap, Platform, PlatformInfo, QrStatus};
 use crate::qr;
 use crate::store::{Session, Store};
 
