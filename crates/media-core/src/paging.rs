@@ -5,8 +5,10 @@
 //! middle of an upstream page and continue later without skipping or repeating
 //! anything, even on platforms whose page size cannot be chosen.
 
+use jiff::Timestamp;
+
 use crate::error::Result;
-use crate::model::Page;
+use crate::model::{Dated, Page};
 use crate::platform::PageReq;
 
 /// Upper bound on upstream calls for one listing, as a safety net against cursors that never end.
@@ -66,4 +68,51 @@ pub async fn collect<T>(
     }
   }
   Ok(Page::new(items, cursor))
+}
+
+/// `--since` / `--until` bounds of a listing (inclusive).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Window {
+  pub since: Option<Timestamp>,
+  pub until: Option<Timestamp>,
+}
+
+impl Window {
+  pub fn is_open(&self) -> bool {
+    self.since.is_none() && self.until.is_none()
+  }
+
+  /// Undated items are kept: the window cannot judge them.
+  fn contains(&self, at: Option<Timestamp>) -> bool {
+    let Some(at) = at else { return true };
+    self.since.is_none_or(|s| at >= s) && self.until.is_none_or(|u| at <= u)
+  }
+
+  fn before(&self, at: Option<Timestamp>) -> bool {
+    matches!((at, self.since), (Some(at), Some(s)) if at < s)
+  }
+}
+
+/// [`collect`] keeping only items inside `window`. A page whose items are all
+/// older than `since` ends the listing, which suits newest-first listings.
+pub async fn collect_window<T: Dated>(
+  limit: usize,
+  cursor: Option<String>,
+  window: Window,
+  mut fetch: impl AsyncFnMut(PageReq) -> Result<Page<T>>,
+) -> Result<Page<T>> {
+  if window.is_open() {
+    return collect(limit, cursor, fetch).await;
+  }
+  collect(limit, cursor, async |req| {
+    let mut page = fetch(req).await?;
+    let past = !page.items.is_empty() && page.items.iter().all(|i| window.before(i.date()));
+    page.items.retain(|i| window.contains(i.date()));
+    if past {
+      page.has_more = false;
+      page.next_cursor = None;
+    }
+    Ok(page)
+  })
+  .await
 }

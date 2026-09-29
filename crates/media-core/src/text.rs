@@ -158,3 +158,33 @@ pub fn file_stem(s: &str) -> String {
     .trim()
     .to_owned()
 }
+
+/// A point in time from the command line: `7d` / `12h` / `30m` ago, a local
+/// date `2026-09-01` (its start), or an RFC 3339 timestamp.
+pub fn parse_when(s: &str) -> Result<Timestamp, String> {
+  let s = s.trim();
+  if let Some((num, unit)) = s.split_at_checked(s.len().saturating_sub(1))
+    && let Ok(n) = num.parse::<i64>()
+  {
+    let secs = match unit {
+      "d" => 86_400,
+      "h" => 3_600,
+      "m" => 60,
+      _ => 0,
+    };
+    if secs > 0 {
+      return Timestamp::now()
+        .checked_sub(jiff::SignedDuration::from_secs(n * secs))
+        .map_err(|e| e.to_string());
+    }
+  }
+  if let Ok(date) = s.parse::<jiff::civil::Date>() {
+    return date
+      .to_zoned(TimeZone::system())
+      .map(|z| z.timestamp())
+      .map_err(|e| e.to_string());
+  }
+  s.parse::<Timestamp>().map_err(|_| {
+    format!("`{s}` is not a time: use 7d / 12h / 30m, 2026-09-01 or an RFC 3339 timestamp")
+  })
+}

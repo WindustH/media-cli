@@ -13,6 +13,7 @@ browser = ["dep:rookie"]
 [dependencies]
 clap.workspace = true
 comfy-table = "8"
+csv = "1"
 dirs = "6"
 futures-util = "0.3"
 html2text = "0.17"

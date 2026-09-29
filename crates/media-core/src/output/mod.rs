@@ -1,8 +1,10 @@
-//! Printing results: a human view for terminals, and a stable envelope
-//! (`{ok, schema_version, platform, data | error}`) as JSON or YAML for
-//! scripts and agents. Non-terminal stdout defaults to YAML.
+//! Printing results: a human view for terminals, a stable envelope
+//! (`{ok, schema_version, platform, fetched_at, data | error}`) as JSON or
+//! YAML for scripts and agents, and flat rows (JSON Lines, CSV) for analysis.
+//! Non-terminal stdout defaults to YAML.
 
 mod human;
+pub(crate) mod rows;
 
 use std::io::{IsTerminal, Write};
 
@@ -19,6 +21,10 @@ pub enum Format {
   Table,
   Json,
   Yaml,
+  /// One JSON object per item, no envelope (errors go to stderr).
+  Jsonl,
+  /// One row per item with dotted columns, no envelope (errors go to stderr).
+  Csv,
 }
 
 impl Format {
@@ -40,6 +46,7 @@ struct Envelope<'a, T: Serialize> {
   schema_version: &'static str,
   #[serde(skip_serializing_if = "Option::is_none")]
   platform: Option<&'a str>,
+  fetched_at: jiff::Timestamp,
   #[serde(skip_serializing_if = "Option::is_none")]
   data: Option<&'a T>,
   #[serde(skip_serializing_if = "Option::is_none")]
@@ -56,16 +63,66 @@ fn print_structured<T: Serialize>(format: Format, envelope: &Envelope<'_, T>) {
   let _ = out.flush();
 }
 
+/// Rows with `platform` and `fetched_at` added, for repeated snapshots.
+fn print_rows(format: Format, platform: Option<&str>, data: &Data) {
+  let fetched_at = jiff::Timestamp::now().to_string();
+  let rows: Vec<serde_json::Map<String, serde_json::Value>> = rows::rows(data)
+    .iter()
+    .map(|r| {
+      let mut row = match format {
+        Format::Csv => rows::flatten(r),
+        _ => match r {
+          serde_json::Value::Object(m) => m.clone(),
+          other => serde_json::Map::from_iter([("value".to_owned(), other.clone())]),
+        },
+      };
+      if let Some(p) = platform {
+        row.insert("platform".into(), p.into());
+      }
+      row.insert("fetched_at".into(), fetched_at.clone().into());
+      row
+    })
+    .collect();
+  let mut out = std::io::stdout().lock();
+  if format == Format::Jsonl {
+    for row in &rows {
+      let _ = writeln!(out, "{}", serde_json::Value::Object(row.clone()));
+    }
+    return;
+  }
+  // Columns in first-seen order across all rows.
+  let mut columns: Vec<&String> = Vec::new();
+  for row in &rows {
+    for key in row.keys() {
+      if !columns.contains(&key) {
+        columns.push(key);
+      }
+    }
+  }
+  let mut w = csv::Writer::from_writer(out);
+  let _ = w.write_record(columns.iter().map(|c| c.as_str()));
+  for row in &rows {
+    let _ = w.write_record(
+      columns
+        .iter()
+        .map(|c| row.get(*c).map(rows::cell).unwrap_or_default()),
+    );
+  }
+  let _ = w.flush();
+}
+
 /// Print a successful result.
 pub fn emit(format: Format, platform: Option<&str>, data: &Data) {
   match format {
     Format::Table => human::render(data),
+    Format::Jsonl | Format::Csv => print_rows(format, platform, data),
     _ => print_structured(
       format,
       &Envelope {
         ok: true,
         schema_version: SCHEMA_VERSION,
         platform,
+        fetched_at: jiff::Timestamp::now(),
         data: Some(data),
         error: None,
       },
@@ -76,13 +133,14 @@ pub fn emit(format: Format, platform: Option<&str>, data: &Data) {
 /// Print a failure: the envelope on stdout for machines, a message on stderr for people.
 pub fn emit_error(format: Format, platform: Option<&str>, error: &Error) {
   match format {
-    Format::Table => human::error(error),
+    Format::Table | Format::Jsonl | Format::Csv => human::error(error),
     _ => print_structured::<()>(
       format,
       &Envelope {
         ok: false,
         schema_version: SCHEMA_VERSION,
         platform,
+        fetched_at: jiff::Timestamp::now(),
         data: None,
         error: Some(error),
       },

@@ -1,9 +1,30 @@
 # Output for scripts and agents
 
-Every command prints either a human view (tables and cards) or a structured
-envelope. The envelope is chosen with `--json`, `--yaml` or `-f/--format`, or
-`MEDIA_OUTPUT=json|yaml|table`. When stdout is not a terminal, YAML is the
-default, because it is the most compact for language models.
+Every command prints a human view (tables and cards), a structured envelope,
+or flat rows. Choose with `--json`, `--yaml` or `-f/--format
+table|json|yaml|jsonl|csv`, or `MEDIA_OUTPUT`. When stdout is not a terminal,
+YAML is the default, because it is the most compact for language models.
+
+## Rows for analysis (`jsonl`, `csv`)
+
+`-f jsonl` prints one JSON object per item and `-f csv` one row per item
+with nested fields as dotted columns (`author.name`, `metrics.views`); lists
+of plain values are joined with `|`. There is no envelope: errors go to
+stderr with a non-zero exit code. Every row carries `platform` and
+`fetched_at`, so repeated runs (cron) build a time series directly.
+
+- Comment threads are flattened: each comment is a row with `depth` and
+  `parent_id`. `comments --all --replies` fetches every comment and every reply.
+- Insights give one row per headline number (`section=total`), trend point
+  (`section=series`, with `date`) and distribution slice (`section=breakdown`).
+- Listings of posts, comments and notifications take `--since` / `--until`
+  (`7d`, `12h`, `2026-09-01` or an RFC 3339 time).
+
+```sh
+media bili user-posts 946974 -n 500 --since 90d -f csv > videos.csv
+media bili comments BV1xx411c7mD --all --replies -f jsonl > comments.jsonl
+media x insights -f csv > account.csv
+```
 
 ## Envelope
 
@@ -93,6 +114,17 @@ of anything created.
 **Transcript** (subtitles, danmaku): `lang`, `cues` of `from`, `to` (seconds), `text`.
 
 **Downloads**: a list of `kind`, `path`, `bytes`.
+
+**Insights** (`insights [POST]`, creator analytics of your account or one of
+your posts): `kind` (`account` / `post`), `subject`, `title`, `url`, `from` /
+`to` (days covered), `totals` (headline numbers such as `views`, `likes`,
+`new_followers`, `avg_watch_seconds`; rates as 0..1 fractions), `series`
+(`metric` + `points` of `date`, `value`) and `breakdowns` (`dimension` such as
+`traffic_source`, `age`, `gender`, `region`, with `items` of `label`, `value`,
+`ratio`).
+
+`likers POST` lists the users who liked a post (a page of Users) and
+`reposts POST` its reposts / retweets / quotes / crossposts (a page of Posts).
 
 `--raw` adds the untouched upstream object as `raw` to posts, users, comments,
 collections and notifications.

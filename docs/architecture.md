@@ -31,10 +31,10 @@ line in `src/main.rs`.
 | `account` | `login` (QR / browser / cookie string), `logout`, `status` |
 | `http` | Chrome-fingerprinted client (wreq), cookie jar, pacing, retries, streaming download |
 | `store` | session file (0600), TTL cache, `#N` short-index lists |
-| `paging` | `collect`: follow cursors until `--limit` items |
+| `paging` | `collect`: follow cursors until `--limit` items; `collect_window`: `--since` / `--until` |
 | `download` | save media, merge DASH audio/video, audio-only, WAV segments (ffmpeg) |
 | `file` | format detection by magic bytes, images to upload |
-| `output` | human tables/cards and the `{ok, schema_version, platform, data}` envelope |
+| `output` | human tables/cards, the `{ok, schema_version, platform, fetched_at, data}` envelope, and flat JSON Lines / CSV rows |
 | `json` | `ValueExt`: dotted-path getters tolerant of upstream quirks (`v.str("a.b.0")`, `v.count("stat.like")`) |
 | `text` | counts (`1.2万`), durations, truncation, HTML to text, timestamps |
 | `browser` | import cookies from local browsers (`browser` feature, on by default) |

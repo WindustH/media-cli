@@ -11,7 +11,9 @@ use std::time::Duration;
 
 use crate::ctx::Ctx;
 use crate::error::{Error, Result};
-use crate::model::{Action, Collection, Comment, Data, Media, Notification, Page, Post, User};
+use crate::model::{
+  Action, Collection, Comment, Data, Insights, Media, Notification, Page, Post, User,
+};
 
 /// Shared operations a platform can provide. Drives `--help` (unsupported
 /// commands are hidden) and the `media platforms` matrix.
@@ -26,6 +28,8 @@ pub enum Cap {
   Read,
   Comments,
   Replies,
+  Likers,
+  Reposts,
   User,
   UserPosts,
   Followers,
@@ -44,6 +48,8 @@ pub enum Cap {
   Publish,
   Delete,
   Download,
+  AccountInsights,
+  PostInsights,
 }
 
 impl Cap {
@@ -57,6 +63,8 @@ impl Cap {
     Cap::Read,
     Cap::Comments,
     Cap::Replies,
+    Cap::Likers,
+    Cap::Reposts,
     Cap::User,
     Cap::UserPosts,
     Cap::Followers,
@@ -75,6 +83,8 @@ impl Cap {
     Cap::Publish,
     Cap::Delete,
     Cap::Download,
+    Cap::AccountInsights,
+    Cap::PostInsights,
   ];
 
   pub fn name(self) -> &'static str {
@@ -88,6 +98,8 @@ impl Cap {
       Cap::Read => "read",
       Cap::Comments => "comments",
       Cap::Replies => "replies",
+      Cap::Likers => "likers",
+      Cap::Reposts => "reposts",
       Cap::User => "user",
       Cap::UserPosts => "user-posts",
       Cap::Followers => "followers",
@@ -106,6 +118,8 @@ impl Cap {
       Cap::Publish => "post",
       Cap::Delete => "delete",
       Cap::Download => "download",
+      Cap::AccountInsights => "insights",
+      Cap::PostInsights => "post-insights",
     }
   }
 }
@@ -318,6 +332,16 @@ pub trait Platform: Sized {
     unsupported!("replies")
   }
 
+  /// Accounts that liked a post (where the platform shows them).
+  async fn likers(&self, post: &str, page: &PageReq) -> Result<Page<User>> {
+    unsupported!("likers")
+  }
+
+  /// Reposts, retweets, quotes or crossposts of a post.
+  async fn reposts(&self, post: &str, page: &PageReq) -> Result<Page<Post>> {
+    unsupported!("reposts")
+  }
+
   async fn user(&self, user: &str) -> Result<User> {
     unsupported!("user")
   }
@@ -394,6 +418,14 @@ pub trait Platform: Sized {
 
   async fn delete(&self, post: &str) -> Result<Action> {
     unsupported!("delete")
+  }
+
+  // ── analytics ────────────────────────────────────────────────────────
+
+  /// Creator-center analytics of the logged-in account (`post` = `None`) or of
+  /// one of its posts, over the last `days` days where the platform allows it.
+  async fn insights(&self, post: Option<&str>, days: u32) -> Result<Insights> {
+    unsupported!("insights")
   }
 
   // ── media ────────────────────────────────────────────────────────────

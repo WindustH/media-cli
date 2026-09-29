@@ -3,8 +3,13 @@
 use std::path::PathBuf;
 
 use clap::Subcommand;
+use jiff::Timestamp;
 
+use crate::error::{Error, Result};
+use crate::model::{Dated, Page};
 use crate::output::Format;
+use crate::paging::{Window, collect, collect_window};
+use crate::platform::PageReq;
 
 /// Options available on every command.
 #[derive(Debug, Clone, clap::Args)]
@@ -52,6 +57,42 @@ pub struct PageArgs {
   /// Continue from the `next_cursor` of an earlier listing
   #[arg(long)]
   pub cursor: Option<String>,
+  /// Only items published since then: 7d, 12h, 2026-09-01 or an RFC 3339 time
+  #[arg(long, value_parser = crate::text::parse_when, value_name = "WHEN")]
+  pub since: Option<Timestamp>,
+  /// Only items published until then (same forms as --since)
+  #[arg(long, value_parser = crate::text::parse_when, value_name = "WHEN")]
+  pub until: Option<Timestamp>,
+}
+
+impl PageArgs {
+  pub fn window(&self) -> Window {
+    Window {
+      since: self.since,
+      until: self.until,
+    }
+  }
+
+  /// Follow a listing of dated items (posts, comments, notifications) within `--since` / `--until`.
+  pub async fn collect_dated<T: Dated>(
+    &self,
+    fetch: impl AsyncFnMut(PageReq) -> Result<Page<T>>,
+  ) -> Result<Page<T>> {
+    collect_window(self.limit, self.cursor.clone(), self.window(), fetch).await
+  }
+
+  /// Follow a listing without publication times (users, collections).
+  pub async fn collect<T>(
+    &self,
+    fetch: impl AsyncFnMut(PageReq) -> Result<Page<T>>,
+  ) -> Result<Page<T>> {
+    if !self.window().is_open() {
+      return Err(Error::input(
+        "--since / --until only apply to posts, comments and notifications",
+      ));
+    }
+    collect(self.limit, self.cursor.clone(), fetch).await
+  }
 }
 
 #[derive(Debug, clap::Args)]
@@ -164,8 +205,30 @@ pub enum CommonCommand {
     /// Fetch every comment (ignores --limit)
     #[arg(long)]
     all: bool,
+    /// Also fetch every reply under each comment
+    #[arg(long)]
+    replies: bool,
     #[command(flatten)]
     page: PageArgs,
+  },
+  /// Accounts that liked a post
+  Likers {
+    post: String,
+    #[command(flatten)]
+    page: PageArgs,
+  },
+  /// Reposts, retweets, quotes or crossposts of a post
+  Reposts {
+    post: String,
+    #[command(flatten)]
+    page: PageArgs,
+  },
+  /// Creator analytics of your account, or of one of your posts
+  Insights {
+    post: Option<String>,
+    /// Days of history for trends
+    #[arg(short, long, default_value_t = 30)]
+    days: u32,
   },
   /// Replies under one comment
   Replies {

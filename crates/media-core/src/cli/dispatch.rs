@@ -7,9 +7,9 @@ use super::args::{CommonCommand, SearchKind};
 use crate::account;
 use crate::download::{self, DownloadOpts};
 use crate::error::{Error, Result};
-use crate::model::Data;
+use crate::model::{Comment, Data};
 use crate::paging::collect;
-use crate::platform::{Draft, Platform, Query};
+use crate::platform::{Cap, Draft, Platform, Query};
 
 fn confirm(yes: bool, what: &str) -> Result<()> {
   if yes {
@@ -64,29 +64,33 @@ pub(super) async fn common<P: Platform>(
         sort: a.sort,
         filter: a.filter,
       };
-      let (limit, cursor) = (a.page.limit, a.page.cursor);
+      let page = a.page;
       ok(match a.kind {
         SearchKind::Post => {
-          Data::Posts(collect(limit, cursor, async |r| p.search(&q, &r).await).await?)
+          Data::Posts(page.collect_dated(async |r| p.search(&q, &r).await).await?)
         }
         SearchKind::User => {
-          Data::Users(collect(limit, cursor, async |r| p.search_users(&q, &r).await).await?)
+          Data::Users(page.collect(async |r| p.search_users(&q, &r).await).await?)
         }
-        SearchKind::Topic => {
-          Data::Collections(collect(limit, cursor, async |r| p.search_topics(&q, &r).await).await?)
-        }
+        SearchKind::Topic => Data::Collections(
+          page
+            .collect(async |r| p.search_topics(&q, &r).await)
+            .await?,
+        ),
       })
     }
     C::Hot { category, page } => {
       let category = category.as_deref();
       ok(Data::Posts(
-        collect(page.limit, page.cursor, async |r| p.hot(category, &r).await).await?,
+        page
+          .collect_dated(async |r| p.hot(category, &r).await)
+          .await?,
       ))
     }
     C::Feed { kind, page } => {
       let kind = kind.as_deref();
       ok(Data::Posts(
-        collect(page.limit, page.cursor, async |r| p.feed(kind, &r).await).await?,
+        page.collect_dated(async |r| p.feed(kind, &r).await).await?,
       ))
     }
     C::Read { post } => ok(Data::Post(Box::new(p.read(&ctx.post_ref(&post)?).await?))),
@@ -94,16 +98,20 @@ pub(super) async fn common<P: Platform>(
       post,
       sort,
       all,
-      page,
+      replies,
+      mut page,
     } => {
       let (post, sort) = (ctx.post_ref(&post)?, sort.as_deref());
-      let limit = if all { usize::MAX } else { page.limit };
-      ok(Data::Comments(
-        collect(limit, page.cursor, async |r| {
-          p.comments(&post, sort, &r).await
-        })
-        .await?,
-      ))
+      if all {
+        page.limit = usize::MAX;
+      }
+      let mut comments = page
+        .collect_dated(async |r| p.comments(&post, sort, &r).await)
+        .await?;
+      if replies {
+        complete_replies(p, &post, &mut comments.items).await?;
+      }
+      ok(Data::Comments(comments))
     }
     C::Replies {
       post,
@@ -112,77 +120,88 @@ pub(super) async fn common<P: Platform>(
     } => {
       let post = ctx.post_ref(&post)?;
       ok(Data::Comments(
-        collect(page.limit, page.cursor, async |r| {
-          p.replies(&post, &comment, &r).await
-        })
-        .await?,
+        page
+          .collect_dated(async |r| p.replies(&post, &comment, &r).await)
+          .await?,
       ))
+    }
+    C::Likers { post, page } => {
+      let post = ctx.post_ref(&post)?;
+      ok(Data::Users(
+        page.collect(async |r| p.likers(&post, &r).await).await?,
+      ))
+    }
+    C::Reposts { post, page } => {
+      let post = ctx.post_ref(&post)?;
+      ok(Data::Posts(
+        page
+          .collect_dated(async |r| p.reposts(&post, &r).await)
+          .await?,
+      ))
+    }
+    C::Insights { post, days } => {
+      let post = post.map(|x| ctx.post_ref(&x)).transpose()?;
+      ok(Data::Insights(Box::new(
+        p.insights(post.as_deref(), days.max(1)).await?,
+      )))
     }
     C::User { user } => ok(Data::User(Box::new(p.user(&ctx.user_ref(&user)?).await?))),
     C::UserPosts { user, page } => {
       let user = ctx.user_ref(&user)?;
       ok(Data::Posts(
-        collect(page.limit, page.cursor, async |r| {
-          p.user_posts(&user, &r).await
-        })
-        .await?,
+        page
+          .collect_dated(async |r| p.user_posts(&user, &r).await)
+          .await?,
       ))
     }
     C::Followers { user, page } => {
       let user = ctx.user_ref(&user)?;
       ok(Data::Users(
-        collect(page.limit, page.cursor, async |r| {
-          p.followers(&user, &r).await
-        })
-        .await?,
+        page.collect(async |r| p.followers(&user, &r).await).await?,
       ))
     }
     C::Following { user, page } => {
       let user = ctx.user_ref(&user)?;
       ok(Data::Users(
-        collect(page.limit, page.cursor, async |r| {
-          p.following(&user, &r).await
-        })
-        .await?,
+        page.collect(async |r| p.following(&user, &r).await).await?,
       ))
     }
     C::Collections { user, page } => {
       let user = user.map(|u| ctx.user_ref(&u)).transpose()?;
       let user = user.as_deref();
       ok(Data::Collections(
-        collect(page.limit, page.cursor, async |r| {
-          p.collections(user, &r).await
-        })
-        .await?,
+        page
+          .collect(async |r| p.collections(user, &r).await)
+          .await?,
       ))
     }
     C::Favorites { user, folder, page } => {
       let user = user.map(|u| ctx.user_ref(&u)).transpose()?;
       let (user, folder) = (user.as_deref(), folder.as_deref());
       ok(Data::Posts(
-        collect(page.limit, page.cursor, async |r| {
-          p.favorites(user, folder, &r).await
-        })
-        .await?,
+        page
+          .collect_dated(async |r| p.favorites(user, folder, &r).await)
+          .await?,
       ))
     }
     C::Likes { user, page } => {
       let user = user.map(|u| ctx.user_ref(&u)).transpose()?;
       let user = user.as_deref();
       ok(Data::Posts(
-        collect(page.limit, page.cursor, async |r| p.likes(user, &r).await).await?,
+        page
+          .collect_dated(async |r| p.likes(user, &r).await)
+          .await?,
       ))
     }
     C::History { page } => ok(Data::Posts(
-      collect(page.limit, page.cursor, async |r| p.history(&r).await).await?,
+      page.collect_dated(async |r| p.history(&r).await).await?,
     )),
     C::Notifications { kind, page } => {
       let kind = kind.as_deref();
       ok(Data::Notifications(
-        collect(page.limit, page.cursor, async |r| {
-          p.notifications(kind, &r).await
-        })
-        .await?,
+        page
+          .collect_dated(async |r| p.notifications(kind, &r).await)
+          .await?,
       ))
     }
     C::Unread => ok(Data::Counts(p.unread().await?)),
@@ -254,4 +273,22 @@ pub(super) async fn common<P: Platform>(
       ))
     }
   }
+}
+
+/// Fetch the full reply thread of every comment whose inline replies are
+/// incomplete (platforms usually inline only a few).
+async fn complete_replies<P: Platform>(p: &P, post: &str, comments: &mut [Comment]) -> Result<()> {
+  if !P::INFO.supports(Cap::Replies) {
+    return Ok(());
+  }
+  for c in comments.iter_mut() {
+    let expected = c.reply_count.unwrap_or(0) as usize;
+    if expected == 0 || c.replies.len() >= expected {
+      continue;
+    }
+    let id = c.id.clone();
+    let all = collect(usize::MAX, None, async |r| p.replies(post, &id, &r).await).await?;
+    c.replies = all.items;
+  }
+  Ok(())
 }

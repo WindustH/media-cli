@@ -352,6 +352,29 @@ pub struct AuthStatus {
   pub message: Option<String>,
 }
 
+/// Items with a publication time, which `--since` / `--until` filter on.
+pub trait Dated {
+  fn date(&self) -> Option<Timestamp>;
+}
+
+impl Dated for Post {
+  fn date(&self) -> Option<Timestamp> {
+    self.created_at
+  }
+}
+
+impl Dated for Comment {
+  fn date(&self) -> Option<Timestamp> {
+    self.created_at
+  }
+}
+
+impl Dated for Notification {
+  fn date(&self) -> Option<Timestamp> {
+    self.created_at
+  }
+}
+
 /// A timed line of a transcript / subtitle track.
 #[derive(Debug, Clone, Serialize)]
 pub struct Cue {
@@ -373,6 +396,78 @@ pub struct Downloaded {
   pub bytes: u64,
 }
 
+/// One value of a trend.
+#[derive(Debug, Clone, Serialize)]
+pub struct Point {
+  /// `YYYY-MM-DD` for daily data, RFC 3339 for finer steps.
+  pub date: String,
+  pub value: Value,
+}
+
+/// A metric over time, e.g. daily views.
+#[derive(Debug, Clone, Serialize)]
+pub struct Series {
+  pub metric: String,
+  pub points: Vec<Point>,
+}
+
+/// One slice of a distribution, e.g. `search` in traffic sources.
+#[derive(Debug, Clone, Serialize)]
+pub struct Share {
+  pub label: String,
+  pub value: Value,
+  /// Fraction of the whole (0..=1) when the platform reports or implies it.
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub ratio: Option<f64>,
+}
+
+/// A distribution over one dimension: traffic source, age, gender, region, device ...
+#[derive(Debug, Clone, Serialize)]
+pub struct Breakdown {
+  pub dimension: String,
+  pub items: Vec<Share>,
+}
+
+/// Analytics of the logged-in account or of one of its posts, as the
+/// platform's creator center reports them.
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct Insights {
+  /// `account` or `post`.
+  pub kind: String,
+  /// The account or post the numbers are about.
+  pub subject: String,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub title: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub url: Option<String>,
+  /// First and last day covered, `YYYY-MM-DD`.
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub from: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub to: Option<String>,
+  /// Headline numbers: `views`, `likes`, `new_followers`, `avg_watch_seconds`,
+  /// `completion_rate` ... (snake_case, rates as 0..=1 fractions).
+  #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+  pub totals: BTreeMap<String, Value>,
+  #[serde(skip_serializing_if = "Vec::is_empty")]
+  pub series: Vec<Series>,
+  #[serde(skip_serializing_if = "Vec::is_empty")]
+  pub breakdowns: Vec<Breakdown>,
+  #[serde(skip_serializing_if = "Extra::is_empty")]
+  pub extra: Extra,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub raw: Option<Value>,
+}
+
+impl Insights {
+  /// Set a headline number; skipped when the platform did not report it.
+  pub fn total(&mut self, metric: &str, value: impl Into<Option<Value>>) {
+    if let Some(v) = value.into().filter(|v| !v.is_null()) {
+      self.totals.insert(metric.to_owned(), v);
+    }
+  }
+}
+
 /// Everything a command can print. Serialized as the envelope's `data`.
 #[derive(Debug, Clone, Serialize)]
 #[serde(untagged)]
@@ -389,6 +484,7 @@ pub enum Data {
   Counts(BTreeMap<String, u64>),
   Transcript(Transcript),
   Downloads(Vec<Downloaded>),
+  Insights(Box<Insights>),
   /// Anything else; printed as YAML in the terminal.
   Value(Value),
 }
@@ -438,6 +534,7 @@ impl Data {
           user(u);
         }
       }
+      Data::Insights(i) => i.raw = None,
       _ => {}
     }
   }
