@@ -44,6 +44,11 @@ pub fn dynamic(v: &Value) -> Post {
   p.metrics.likes = stat.count("like.count");
   p.metrics.comments = stat.count("comment.count");
   p.metrics.shares = stat.count("forward.count");
+  // A video dynamic also carries the video's plays and danmaku.
+  p.metrics.views = major.count("archive.stat.play");
+  if let Some(n) = major.count("archive.stat.danmaku") {
+    p.metrics.other.insert("danmaku".into(), n);
+  }
   let images = major
     .list("draw.items")
     .iter()
@@ -78,6 +83,32 @@ pub fn dynamic(v: &Value) -> Post {
   }
   if modules.str("module_tag.text").as_deref() == Some("置顶") {
     p.extra.insert("pinned".into(), json!(true));
+  }
+  p
+}
+
+/// One entry of a dynamic's repost list (`detail/forward`): who reposted, with what text.
+pub fn forward(v: &Value, of: &str) -> Post {
+  let id = v.str("id_str").unwrap_or_default();
+  let mut p = Post {
+    url: (!id.is_empty()).then(|| format!("{DYNAMIC_URL}{id}")),
+    id,
+    kind: "dynamic".into(),
+    text: v
+      .first_str(&["desc.text", "desc"])
+      .map(|t| t.trim().to_owned())
+      .filter(|t| !t.is_empty()),
+    author: Some(user(v.at("user"))).filter(|u| !u.id.is_empty()),
+    created_at: secs(v, &["pub_ts", "ts"]),
+    raw: Some(v.clone()),
+    ..Post::default()
+  };
+  p.extra.insert("type".into(), json!("forward"));
+  p.extra.insert("repost_of".into(), json!(of));
+  if p.created_at.is_none()
+    && let Some(when) = v.str("pub_time")
+  {
+    p.extra.insert("pub_time".into(), json!(when));
   }
   p
 }

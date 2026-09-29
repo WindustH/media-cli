@@ -54,6 +54,7 @@ pub struct Call<'a> {
   ctx: &'a Ctx,
   url: String,
   query: Vec<(String, String)>,
+  headers: Vec<(&'static str, String)>,
   body: Option<Body>,
   write: bool,
   wbi: bool,
@@ -66,6 +67,7 @@ impl<'a> Call<'a> {
       ctx,
       url: url.to_owned(),
       query: Vec::new(),
+      headers: Vec::new(),
       body: write.then(|| Body::Form(Vec::new())),
       write,
       wbi: false,
@@ -80,6 +82,12 @@ impl<'a> Call<'a> {
       Some(Body::Form(form)) => form.push(pair),
       _ => self.query.push(pair),
     }
+    self
+  }
+
+  /// Per-request header (e.g. the referer of another Bilibili site).
+  pub fn header(mut self, name: &'static str, value: impl Into<String>) -> Self {
+    self.headers.push((name, value.into()));
     self
   }
 
@@ -132,12 +140,15 @@ impl<'a> Call<'a> {
         .await;
     }
     let url = self.full_url().await?;
-    let req = match self.body.take() {
+    let mut req = match self.body.take() {
       None => ctx.http.get(url),
       Some(Body::Form(form)) => ctx.http.post(url).form(form),
       Some(Body::Json(body)) => ctx.http.post(url).json(&body),
       Some(Body::Multipart(parts)) => ctx.http.post(url).multipart(parts),
     };
+    for (name, value) in &self.headers {
+      req = req.header(name, value);
+    }
     let resp = req.send().await?;
     if resp.status.as_u16() == 412 {
       return Err(
