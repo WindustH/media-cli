@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <strong>One command line for Zhihu, Xiaohongshu, Twitter / X, Bilibili and Reddit.</strong>
+  <strong>One command line for Zhihu, Xiaohongshu, Twitter / X, Bilibili, Reddit and YouTube.</strong>
 </p>
 
 <p align="center">
@@ -17,7 +17,7 @@
 
 ---
 
-`media` reads, searches, publishes and downloads on five social platforms
+`media` reads, searches, publishes and downloads on six social platforms
 with the same commands everywhere. It works in a terminal for people, and in
 scripts and AI agents through a stable JSON / YAML output.
 
@@ -49,10 +49,12 @@ $ media bili download '#1' --audio-only
 - **Paging that never loses its place.** `-n 200` follows pages for you;
   `--cursor` continues exactly where the last run stopped.
 - **Log in the easy way.** Scan a QR code with the Zhihu, Xiaohongshu or
-  Bilibili app, or paste a cookie header. Sessions stay on your machine.
+  Bilibili app, reuse your browser's session, or paste a cookie header.
+  Sessions stay on your machine.
 - **Much works without an account.** Bilibili videos, comments, users and
   rankings; Twitter profiles, tweets and timelines; Xiaohongshu notes; Reddit
-  posts, comments, subreddits and users.
+  posts, comments, subreddits and users; YouTube videos, Shorts, channels,
+  comments, playlists, transcripts and downloads.
 - **Downloads included.** Original-quality images, videos with their audio
   merged, audio only, or speech-recognition-ready WAV segments.
 - **Behaves like a browser.** Chrome's network fingerprint, each platform's
@@ -60,27 +62,28 @@ $ media bili download '#1' --audio-only
 - **Platform extras.** Bilibili coins, 一键三连, subtitles, AI summaries and
   danmaku; Twitter retweets, quotes and lists; Zhihu questions, articles and
   answers; Xiaohongshu creator notes; Reddit subreddits, downvotes, crossposts
-  and galleries.
+  and galleries; YouTube transcripts, Shorts, live streams, community posts,
+  playlists and related videos.
 
 ## What each platform supports
 
-| | Zhihu | Xiaohongshu | Twitter / X | Bilibili | Reddit |
-| --- | :-: | :-: | :-: | :-: | :-: |
-| QR login | ✓ | ✓ | | ✓ | |
-| search posts / users | ✓ | ✓ | ✓ | ✓ | ✓ |
-| search topics | ✓ | ✓ | | | ✓ |
-| hot, feed | ✓ | ✓ | ✓ | ✓ | ✓ |
-| read, comments | ✓ | ✓ | ✓ | ✓ | ✓ |
-| comment replies | ✓ | ✓ | | ✓ | ✓ |
-| user, user posts | ✓ | ✓ | ✓ | ✓ | ✓ |
-| followers, following | ✓ | | ✓ | ✓ | |
-| collections, favorites | ✓ | favorites | ✓ | ✓ | ✓ |
-| likes | | ✓ | ✓ | | ✓ |
-| history | | | | ✓ | |
-| notifications | ✓ | ✓ | ✓ | ✓ | ✓ |
-| like, favorite, comment, follow | ✓ | ✓ | ✓ | ✓ | ✓ |
-| post, delete | ✓ | ✓ | ✓ | ✓ | ✓ |
-| download | ✓ | ✓ | ✓ | ✓ | ✓ |
+| | Zhihu | Xiaohongshu | Twitter / X | Bilibili | Reddit | YouTube |
+| --- | :-: | :-: | :-: | :-: | :-: | :-: |
+| QR login | ✓ | ✓ | | ✓ | | |
+| search posts / users | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| search topics | ✓ | ✓ | | | ✓ | playlists |
+| hot, feed | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| read, comments | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| comment replies | ✓ | ✓ | | ✓ | ✓ | ✓ |
+| user, user posts | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| followers, following | ✓ | | ✓ | ✓ | | following |
+| collections, favorites | ✓ | favorites | ✓ | ✓ | ✓ | ✓ |
+| likes | | ✓ | ✓ | | ✓ | ✓ |
+| history | | | | ✓ | | ✓ |
+| notifications | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| like, favorite, comment, follow | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| post, delete | ✓ | ✓ | ✓ | ✓ | ✓ | |
+| download | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 
 ## Quick start
 
@@ -99,6 +102,8 @@ media bili comments '#1'
 media x user-posts NASA -n 10
 media xhs read https://www.xiaohongshu.com/explore/68cfff45000000001003c253
 media reddit sub rust --sort top --time week -n 5
+media youtube search "rust tutorial" --filter video -n 5
+media yt transcript https://youtu.be/5C_HPTJg5ek
 ```
 
 Log in for everything else:
@@ -107,6 +112,7 @@ Log in for everything else:
 media bili login                 # scan the QR code with the Bilibili app
 media twitter login --cookie 'auth_token=...; ct0=...'
 media reddit login --browser     # reuse the session of your browser
+media youtube login --browser
 media zhihu status
 ```
 
@@ -122,11 +128,14 @@ media twitter post "Hello" -i photo.jpg
 media reddit comments '#1' --sort top
 media reddit post "Hello from the terminal" --title "Hi" --topic r/test
 media reddit follow r/rust
+media youtube user @Fireship
+media yt comments '#1' --sort new --all --replies -f csv > comments.csv
+media youtube download https://www.youtube.com/shorts/fwBIZRq-vzY
 ```
 
 Each platform also answers to shorter names (`bilibili`, `x`, `xiaohongshu`,
-`zh`, `rd` ...). Link the binary as `bili`, `xhs`, `twitter`, `zhihu` or
-`reddit` to skip the platform word entirely: `ln -s $(which media) ~/.local/bin/bili`.
+`zh`, `rd`, `yt` ...). Link the binary as `bili`, `xhs`, `twitter`, `zhihu`,
+`reddit` or `youtube` to skip the platform word entirely: `ln -s $(which media) ~/.local/bin/bili`.
 
 ## Good to know
 
@@ -142,6 +151,10 @@ Each platform also answers to shorter names (`bilibili`, `x`, `xiaohongshu`,
   `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`, `REDDIT_USERNAME` and
   `REDDIT_PASSWORD` for a personal "script" app from
   <https://www.reddit.com/prefs/apps> to use Reddit's official API.
+- YouTube's creator analytics (`media youtube insights`) come from the
+  official YouTube Analytics API: set `YOUTUBE_CLIENT_ID` and
+  `YOUTUBE_CLIENT_SECRET` of a "Desktop app" OAuth client, run
+  `media youtube oauth` once and set the `YOUTUBE_REFRESH_TOKEN` it prints.
 - Keep bulk jobs slow: the platforms watch for automated use and may restrict
   accounts that look like bots.
 

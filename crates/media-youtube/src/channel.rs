@@ -64,13 +64,15 @@ async fn page(api: &Api, id: &str, params: Option<&str>) -> Result<Value> {
 }
 
 /// Profile: header, then the "about" panel (views, joined, country, links).
-pub async fn profile(api: &Api, arg: &str) -> Result<User> {
+pub async fn profile(api: &Api, arg: &str, about: bool) -> Result<User> {
   let id = id(api, arg).await?;
   let v = page(api, &id, None).await?;
   let mut user =
     parse::channel_page(&v).ok_or_else(|| Error::not_found(format!("channel {id} not found")))?;
   // The panel opens from the header: a continuation token behind "…more".
-  let token = parse::first(v.at("header"), "continuationCommand").and_then(|c| c.str("token"));
+  let token = parse::first(v.at("header"), "continuationCommand")
+    .and_then(|c| c.str("token"))
+    .filter(|_| about);
   if let Some(token) = token {
     match api.call("browse", json!({ "continuation": token })).await {
       Ok(about) => parse::about(&about, &mut user),

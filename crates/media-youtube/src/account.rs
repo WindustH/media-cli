@@ -48,7 +48,7 @@ pub async fn whoami(api: &Api) -> Result<User> {
     return Ok(u);
   };
   api.ctx.set_extra(CHANNEL_KEY, &id);
-  let mut user = match channel::profile(api, &id).await {
+  let mut user = match channel::profile(api, &id, false).await {
     Ok(u) => u,
     Err(e) => {
       tracing::debug!("channel of the account: {e}");

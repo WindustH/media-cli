@@ -1,12 +1,13 @@
 //! YouTube-only commands: transcripts, playlists, a channel's Shorts, live
-//! streams and community posts, related videos and dislikes.
+//! streams and community posts, related videos, dislikes and the one-time
+//! OAuth grant for analytics.
 
 use media_core::cli::PageArgs;
 use media_core::{Action, Data, Result, json};
 
 use crate::api::Api;
 use crate::channel::{self, Tab};
-use crate::{caption, library, refs, video};
+use crate::{caption, insights, library, refs, video};
 
 #[derive(Debug, clap::Subcommand)]
 pub enum Command {
@@ -50,6 +51,8 @@ pub enum Command {
     #[command(flatten)]
     page: PageArgs,
   },
+  /// Grant read access to YouTube Analytics once (prints YOUTUBE_REFRESH_TOKEN)
+  Oauth,
   /// Dislike a video (only you see it)
   Dislike {
     video: String,
@@ -97,6 +100,7 @@ pub async fn run(api: &Api, command: Command) -> Result<Data> {
           .await?,
       )
     }
+    C::Oauth => Data::Value(insights::authorize(ctx).await?),
     C::Dislike { video, undo } => {
       let id = refs::video(&ctx.post_ref(&video)?)?;
       let (path, name) = if undo {

@@ -187,10 +187,11 @@ pub async fn add(api: &Api, post: &str, text: &str, reply_to: Option<&str>) -> R
   let id = refs::video(post)?;
   let (path, mut body, action) = match reply_to {
     None => {
-      // YouTube.js `CreateCommentParams`: {2: video id, 5: {1: 0}, 10: 7}.
+      // YouTube.js `CreateCommentParams` as ts-proto writes it: {2: video id,
+      // 5: {} (index 0 is the default and left out), 10: 7}.
       let params = Msg::new()
         .str(2, &id)
-        .msg(5, Msg::new().int(1, 0))
+        .msg(5, Msg::new())
         .int(10, 7)
         .encode();
       let body = json!({ "createCommentParams": params });

@@ -12,6 +12,7 @@ crates/media-xhs            Xiaohongshu
 crates/media-twitter        Twitter / X
 crates/media-bilibili       Bilibili
 crates/media-reddit         Reddit
+crates/media-youtube        YouTube
 ```
 
 Dependencies only point downwards: the binary depends on every crate,
@@ -77,7 +78,7 @@ Every platform follows the same layout so each file has one job:
 | --- | --- |
 | `lib.rs` | `PlatformInfo` and the `Platform` impl: thin, delegates to the modules below |
 | `api.rs` | the platform's transport: base headers, signing hook, response envelope → `Error` |
-| `sign.rs` (or `sign/`) | request signatures (WBI, x-s, x-client-transaction-id ...) |
+| `sign.rs` (or `sign/`) | request signatures (WBI, x-s, x-client-transaction-id, SAPISIDHASH ...) |
 | `refs.rs` | parse ids and URLs into typed references |
 | `parse.rs` | upstream JSON → core models |
 | domain modules (`read.rs`, `write.rs`, `account.rs` ...) | endpoints grouped by domain |

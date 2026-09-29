@@ -14,6 +14,7 @@ mod caption;
 mod channel;
 mod comment;
 mod extra;
+mod insights;
 mod library;
 mod notify;
 mod parse;
@@ -29,8 +30,8 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use media_core::{
-  Action, Cap, Choices, Collection, Comment, Ctx, Data, Media, Notification, Page, PageReq,
-  Platform, PlatformInfo, Post, Query, Result, User,
+  Action, Cap, Choices, Collection, Comment, Ctx, Data, Insights, Media, Notification, Page,
+  PageReq, Platform, PlatformInfo, Post, Query, Result, User,
 };
 
 use crate::api::Api;
@@ -73,6 +74,8 @@ impl Platform for YouTube {
       Cap::DeleteComment,
       Cap::Follow,
       Cap::Download,
+      Cap::AccountInsights,
+      Cap::PostInsights,
     ],
     choices: Choices {
       search_sort: search::SORTS,
@@ -153,10 +156,12 @@ impl Platform for YouTube {
   }
 
   async fn user(&self, user: &str) -> Result<User> {
-    if account::is_me(user) {
-      return account::whoami(&self.api).await;
-    }
-    channel::profile(&self.api, user).await
+    let user = if account::is_me(user) {
+      account::my_channel(&self.api).await?
+    } else {
+      user.to_owned()
+    };
+    channel::profile(&self.api, &user, true).await
   }
 
   async fn user_posts(&self, user: &str, page: &PageReq) -> Result<Page<Post>> {
@@ -215,6 +220,10 @@ impl Platform for YouTube {
 
   async fn follow(&self, user: &str, undo: bool) -> Result<Action> {
     write::follow(&self.api, user, undo).await
+  }
+
+  async fn insights(&self, post: Option<&str>, days: u32) -> Result<Insights> {
+    insights::insights(&self.api, post, days).await
   }
 
   async fn media(&self, post: &str, audio_only: bool) -> Result<(Post, Vec<Media>)> {
