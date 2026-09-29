@@ -24,6 +24,8 @@ pub fn channel(r: &Value) -> Option<User> {
         .and_then(|u| u.strip_prefix('/').map(str::to_owned))
         .filter(|h| h.starts_with('@'))
     });
+  // YouTube shows handles as `@name`; store them bare like other platforms.
+  let handle = handle.map(|h| h.trim_start_matches('@').to_owned());
   let mut u = User {
     name: text(r.at("title")).unwrap_or_else(|| id.clone()),
     url: Some(channel_url(&id)),
@@ -71,6 +73,8 @@ pub fn channel_page(v: &Value) -> Option<User> {
         .and_then(|u| u.rsplit('/').next().map(str::to_owned))
         .filter(|h| h.starts_with('@'))
     });
+  // YouTube shows handles as `@name`; store them bare like other platforms.
+  let handle = handle.map(|h| h.trim_start_matches('@').to_owned());
   let title = header.at("title");
   let mut u = User {
     name: meta

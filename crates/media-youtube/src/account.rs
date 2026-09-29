@@ -38,7 +38,9 @@ fn logged_in(api: &Api, v: &Value) -> Result<()> {
 }
 
 fn handle(v: &Value) -> Option<String> {
-  parse::text(v.at("channelHandle")).filter(|h| h.starts_with('@'))
+  parse::text(v.at("channelHandle"))
+    .filter(|h| h.starts_with('@'))
+    .map(|h| h.trim_start_matches('@').to_owned())
 }
 
 async fn from_menu(api: &Api) -> Result<Identity> {
@@ -93,7 +95,7 @@ pub async fn whoami(api: &Api) -> Result<User> {
   };
   let id = match (who.channel, &who.handle) {
     (Some(id), _) => Some(id),
-    (None, Some(h)) => channel::id(api, h).await.ok(),
+    (None, Some(h)) => channel::id(api, &format!("@{h}")).await.ok(),
     _ => None,
   };
   let Some(id) = id else {

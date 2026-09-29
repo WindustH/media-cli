@@ -42,7 +42,7 @@ pub fn comment_view(cvm: &Value, e: &Entities, video: &str) -> Option<Comment> {
   let author = a.str("channelId").map(|cid| {
     let name = a.str("displayName").unwrap_or_else(|| cid.clone());
     User {
-      handle: name.starts_with('@').then(|| name.clone()),
+      handle: name.strip_prefix('@').map(str::to_owned),
       url: Some(channel_url(&cid)),
       avatar: a.str("avatarThumbnailUrl"),
       verified: a.bool("isVerified") == Some(true),

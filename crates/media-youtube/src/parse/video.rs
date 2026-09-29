@@ -221,7 +221,7 @@ pub fn lockup(l: &Value) -> Option<Lockup> {
     }
   }
   if let (Some(a), Some(n)) = (p.author.as_mut(), name)
-    && (a.name == a.id || a.handle.as_deref() == Some(a.name.as_str()))
+    && (a.name == a.id || a.handle.as_deref() == Some(a.name.trim_start_matches('@')))
   {
     a.name = n;
   }
@@ -278,7 +278,8 @@ pub fn full(player: &Value, next: &Value) -> Option<Post> {
     let handle = m
       .str("ownerProfileUrl")
       .and_then(|u| u.rsplit('/').next().map(str::to_owned))
-      .filter(|h| h.starts_with('@'));
+      .filter(|h| h.starts_with('@'))
+      .map(|h| h.trim_start_matches('@').to_owned());
     let mut u = User {
       name: d
         .str("author")
