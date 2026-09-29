@@ -126,7 +126,7 @@ pub async fn login<P: Platform>(p: &P, args: LoginArgs) -> Result<Data> {
   ctx.store.save_session(&session)?;
   Ok(Data::Auth(AuthStatus {
     authenticated: true,
-    user: Some(user),
+    user: Some(Box::new(user)),
     source: Some(source),
     saved_at: Some(saved_at),
     message: None,
@@ -200,7 +200,7 @@ pub async fn status<P: Platform>(p: &P, loaded: &Loaded) -> Result<(Data, ExitCo
     Ok(user) => Ok((
       Data::Auth(AuthStatus {
         authenticated: true,
-        user: Some(user),
+        user: Some(Box::new(user)),
         source: loaded.session.source.clone(),
         saved_at: loaded.session.saved_at,
         message: None,

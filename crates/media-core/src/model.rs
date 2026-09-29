@@ -342,7 +342,7 @@ impl Action {
 pub struct AuthStatus {
   pub authenticated: bool,
   #[serde(skip_serializing_if = "Option::is_none")]
-  pub user: Option<User>,
+  pub user: Option<Box<User>>,
   /// Where the credential came from: `qrcode`, `cookie`, `browser:chrome`, `env` ...
   #[serde(skip_serializing_if = "Option::is_none")]
   pub source: Option<String>,

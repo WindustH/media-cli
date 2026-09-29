@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use std::process::Stdio;
 
 use indicatif::{ProgressBar, ProgressStyle};
+use tokio::io::AsyncReadExt;
 
 use crate::error::{Error, Result};
 use crate::model::{Downloaded, Media, MediaKind, Post};
@@ -114,6 +115,62 @@ fn extension(url: &str, kind: MediaKind) -> &'static str {
   }
 }
 
+/// Rename `path` when its magic bytes show another format than the extension
+/// guessed from the URL (e.g. HEIC originals behind extension-less URLs).
+async fn fix_extension(path: PathBuf) -> PathBuf {
+  let mut head = [0u8; 16];
+  let read = async {
+    let mut f = tokio::fs::File::open(&path).await?;
+    f.read(&mut head).await
+  };
+  let Ok(n) = read.await else { return path };
+  let Some(ext) = sniff(&head[..n]) else {
+    return path;
+  };
+  let current = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+  if current.eq_ignore_ascii_case(ext) || (ext == "jpg" && current.eq_ignore_ascii_case("jpeg")) {
+    return path;
+  }
+  let renamed = path.with_extension(ext);
+  match tokio::fs::rename(&path, &renamed).await {
+    Ok(()) => renamed,
+    Err(_) => path,
+  }
+}
+
+fn sniff(head: &[u8]) -> Option<&'static str> {
+  Some(match head {
+    [0xFF, 0xD8, 0xFF, ..] => "jpg",
+    [0x89, b'P', b'N', b'G', ..] => "png",
+    [b'G', b'I', b'F', b'8', ..] => "gif",
+    [
+      b'R',
+      b'I',
+      b'F',
+      b'F',
+      _,
+      _,
+      _,
+      _,
+      b'W',
+      b'E',
+      b'B',
+      b'P',
+      ..,
+    ] => "webp",
+    [0x1A, 0x45, 0xDF, 0xA3, ..] => "webm",
+    [b'F', b'L', b'V', ..] => "flv",
+    [_, _, _, _, b'f', b't', b'y', b'p', b0, b1, b2, b3, ..] => match &[*b0, *b1, *b2, *b3] {
+      b"heic" | b"heix" | b"heim" | b"heis" | b"mif1" | b"msf1" => "heic",
+      b"avif" | b"avis" => "avif",
+      b"M4A " => "m4a",
+      b"qt  " => "mov",
+      _ => "mp4",
+    },
+    _ => return None,
+  })
+}
+
 async fn fetch(ctx: &Ctx, referer: &str, url: &str, path: &Path) -> Result<u64> {
   let label = path
     .file_name()
@@ -150,7 +207,7 @@ async fn full(ctx: &Ctx, referer: &str, m: &Media, dir: &Path, name: &str) -> Re
   let out = dir.join(format!("{name}.{}", extension(&m.url, m.kind)));
   let Some(audio_url) = &m.audio_url else {
     fetch(ctx, referer, &m.url, &out).await?;
-    return Ok(out);
+    return Ok(fix_extension(out).await);
   };
   let out = dir.join(format!("{name}.mp4"));
   let video = dir.join(format!("{name}.video.m4s"));

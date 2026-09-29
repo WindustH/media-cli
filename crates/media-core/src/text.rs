@@ -153,7 +153,7 @@ pub fn file_stem(s: &str) -> String {
       }
     })
     .collect();
-  truncate(cleaned.trim(), 80)
+  truncate(cleaned.trim().trim_start_matches('.'), 80)
     .trim_end_matches('…')
     .trim()
     .to_owned()

@@ -439,7 +439,9 @@ async fn execute<P: Platform>(
   };
 
   let ctx = platform.ctx();
-  if persist && !loaded.from_env && ctx.session_changed() {
+  // Only logged-in sessions are saved; guest cookies are not worth keeping.
+  let logged_in = info.required_cookies.iter().all(|c| ctx.http.has_cookie(c));
+  if persist && logged_in && !loaded.from_env && ctx.session_changed() {
     let mut session = ctx.session();
     session.source = loaded.session.source.clone();
     session.saved_at = loaded.session.saved_at;
@@ -506,17 +508,13 @@ async fn common<P: Platform>(
   let ctx = p.ctx();
   let ok = |data: Data| Ok((data, ExitCode::SUCCESS, true));
   match cmd {
-    C::Login(args) => {
-      return account::login(p, args)
-        .await
-        .map(|d| (d, ExitCode::SUCCESS, false));
-    }
-    C::Logout => return account::logout::<P>(ctx).map(|d| (d, ExitCode::SUCCESS, false)),
-    C::Status => {
-      return account::status(p, loaded)
-        .await
-        .map(|(d, code)| (d, code, true));
-    }
+    C::Login(args) => account::login(p, args)
+      .await
+      .map(|d| (d, ExitCode::SUCCESS, false)),
+    C::Logout => account::logout::<P>(ctx).map(|d| (d, ExitCode::SUCCESS, false)),
+    C::Status => account::status(p, loaded)
+      .await
+      .map(|(d, code)| (d, code, true)),
     C::Whoami => ok(Data::User(Box::new(p.whoami().await?))),
     C::Search(a) => {
       let q = Query {
