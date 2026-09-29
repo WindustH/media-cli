@@ -28,6 +28,7 @@ pub fn user(v: &Value) -> Option<User> {
       v.first_count(&["tweet_counts.media_tweets", "legacy.media_count"]),
     ),
     ("listed", v.count("legacy.listed_count")),
+    ("subscriptions", v.count("creator_subscriptions_count")),
   ];
   for (key, n) in other {
     if let Some(n) = n {

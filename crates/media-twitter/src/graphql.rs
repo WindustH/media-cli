@@ -255,6 +255,38 @@ pub const LIST_TWEETS: Op = Op::get(
 pub const LIST_OWNERSHIPS: Op = Op::get("ListOwnerships", "5eUATiy7RZHeOMVM5ZZIcg", DEFAULT);
 pub const EXPLORE_TIMELINE: Op = Op::get("GenericTimelineById", "S_hzVUv1trgZ_5ruDe2IoA", DEFAULT);
 pub const NOTIFICATIONS: Op = Op::get("NotificationsTimeline", "gzC0OYBCnfdYS4M4Gue7BA", DEFAULT);
+// Lazy chunk `shared~bundle.QuoteTweetActivity~bundle.TweetActivity` (the "post engagements" screen).
+pub const FAVORITERS: Op = Op::get("Favoriters", "HaFAhly6sDpoeqGEbFb2Ig", DEFAULT);
+pub const RETWEETERS: Op = Op::get("Retweeters", "UBCF0EF800cPqREAeu1uuA", DEFAULT);
+
+// ── analytics: Relay queries of x.com/i/account_analytics (`bundle.AccountAnalytics`) ──
+
+/// Rollup of a few metrics shown to every account (the analytics upsell).
+pub const FREE_ROLLUP: Op = Op::get("useFetchAnalyticsQuery", "5JkoDLRvQrXv2QV4U5gKFg", NONE);
+/// Account metrics per day (`organic_metrics_time_series`).
+pub const ACCOUNT_SERIES: Op = Op::get("overviewDataUserQuery", "NlJ6RM-hgHxt-iu9cPQz7A", NONE);
+/// Post metrics per day.
+pub const POST_SERIES: Op = Op::get("overviewDataPostQuery", "9c83mWUXFc4RuVLInF9SOQ", NONE);
+/// Post metrics since publication (`organic_metrics_total`).
+pub const POST_TOTALS: Op = Op::get(
+  "postDetailsProviderMetricsTotalQuery",
+  "yLIUkOUqs-4MT8I5gUyztQ",
+  NONE,
+);
+/// Audience of the account: engagements by age, gender, app, network, country, hour.
+pub const ACCOUNT_AUDIENCE: Op =
+  Op::get("audienceOverviewDataQuery", "H47r_cVD9Uu-qMQLktBCKA", NONE);
+pub const POST_AUDIENCE: Op = Op::get(
+  "postDetailsProviderAudienceQuery",
+  "S4-UXaX7xV7kLLelCMej3g",
+  NONE,
+);
+/// The account's posts of a period with their metrics (the "Content" tab).
+pub const CONTENT: Op = Op::get(
+  "ContentPageV2UserTweetsQuery",
+  "7uyOLS6aSCF-HaYHhaZXhw",
+  NONE,
+);
 
 // ── writing ───────────────────────────────────────────────────────────
 

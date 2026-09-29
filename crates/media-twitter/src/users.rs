@@ -1,16 +1,20 @@
-//! Accounts: profiles, the logged-in user, followers / following, people
-//! search, and the lists and bookmark folders shown as collections.
+//! Accounts: profiles, the logged-in user, followers / following, likers and
+//! retweeters of a tweet, people search, and the lists and bookmark folders
+//! shown as collections.
 
-use media_core::{Collection, Error, Page, PageReq, Query, Result, User, Value, ValueExt, json};
+use media_core::{
+  Collection, Error, ErrorCode, Page, PageReq, Query, Result, User, Value, ValueExt, json,
+};
 
 use crate::api::{Api, REST};
 use crate::graphql::{
-  BOOKMARK_FOLDERS, FOLLOWERS, FOLLOWING, LIST_OWNERSHIPS, Op, SEARCH, USER_BY_REST_ID,
-  USER_BY_SCREEN_NAME,
+  BOOKMARK_FOLDERS, FAVORITERS, FOLLOWERS, FOLLOWING, LIST_OWNERSHIPS, Op, RETWEETERS, SEARCH,
+  USER_BY_REST_ID, USER_BY_SCREEN_NAME,
 };
 use crate::parse;
 use crate::refs::{self, UserRef, list_url};
 use crate::timeline::{self, Timeline, vars, with};
+use crate::tweets;
 
 const USER_TIMELINE: &[&str] = &[
   "data.user.result.timeline.timeline.instructions",
@@ -92,6 +96,56 @@ pub async fn followers(api: &Api, arg: &str, req: &PageReq) -> Result<Page<User>
 
 pub async fn following(api: &Api, arg: &str, req: &PageReq) -> Result<Page<User>> {
   people(api, &FOLLOWING, arg, req).await
+}
+
+/// One page of the users of a tweet's engagement timeline (`Favoriters`, `Retweeters`).
+async fn engaged(api: &Api, op: &Op, id: &str, path: &str, req: &PageReq) -> Result<Page<User>> {
+  api.require_login()?;
+  let variables = with(
+    vars(req),
+    json!({ "tweetId": id, "includePromotedContent": false }),
+  );
+  let data = api.graphql(op, variables).await?;
+  let tl = Timeline::at(&data, &[path]);
+  // Past the end X answers the last page again, with the same bottom cursor.
+  if req.cursor.is_some() && tl.bottom == req.cursor {
+    return Ok(Page::last(Vec::new()));
+  }
+  let items = timeline::users(&tl);
+  Ok(match tl.bottom {
+    Some(next) if !items.is_empty() => Page::new(items, Some(next)),
+    _ => Page::last(items),
+  })
+}
+
+/// Accounts that liked a tweet. Likes are private on X since June 2024: only
+/// the author sees them; for other posts X answers an empty list.
+pub async fn likers(api: &Api, arg: &str, req: &PageReq) -> Result<Page<User>> {
+  let id = refs::tweet_id(arg)?;
+  let path = "data.favoriters_timeline.timeline.instructions";
+  let page = engaged(api, &FAVORITERS, &id, path, req).await?;
+  if page.items.is_empty() && req.cursor.is_none() {
+    let tweet = tweets::read(api, &id).await?;
+    let own = user_id_or_self(api, None).await?;
+    if tweet.author.as_ref().is_some_and(|a| a.id != own) {
+      let hint = "likes are private on X since June 2024; `media x read POST` shows the like count";
+      return Err(
+        Error::new(
+          ErrorCode::PermissionDenied,
+          "X shows who liked a post only to its author",
+        )
+        .with_hint(hint),
+      );
+    }
+  }
+  Ok(page)
+}
+
+/// Accounts that retweeted a tweet (its quotes are `reposts`).
+pub async fn retweeters(api: &Api, arg: &str, req: &PageReq) -> Result<Page<User>> {
+  let id = refs::tweet_id(arg)?;
+  let path = "data.retweeters_timeline.timeline.instructions";
+  engaged(api, &RETWEETERS, &id, path, req).await
 }
 
 pub async fn search(api: &Api, q: &Query, req: &PageReq) -> Result<Page<User>> {

@@ -158,6 +158,6 @@ pub fn users(tl: &Timeline) -> Vec<User> {
     .collect()
 }
 
-fn is_promoted(entry_id: &str, item: &Value) -> bool {
+pub fn is_promoted(entry_id: &str, item: &Value) -> bool {
   entry_id.starts_with("promoted") || item.at("promotedMetadata").is_object()
 }

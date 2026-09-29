@@ -1,9 +1,9 @@
-//! Twitter-only commands: retweet, quote, list timelines and bookmark folders.
+//! Twitter-only commands: retweet, quote, retweeters, list timelines and
+//! bookmark folders.
 
 use std::path::PathBuf;
 
 use media_core::cli::PageArgs;
-use media_core::paging::collect;
 use media_core::{Action, Data, Draft, Error, Result};
 
 use crate::api::Api;
@@ -27,6 +27,12 @@ pub enum Command {
     #[arg(short = 'i', long = "image", value_name = "PATH")]
     images: Vec<PathBuf>,
   },
+  /// Accounts that retweeted a tweet (its quotes: `reposts`)
+  Retweeters {
+    post: String,
+    #[command(flatten)]
+    page: PageArgs,
+  },
   /// Latest tweets of a list (id or x.com/i/lists/... URL; see `collections`)
   List {
     list: String,
@@ -49,17 +55,23 @@ pub async fn run(api: &Api, command: Command) -> Result<Data> {
     Command::Quote { post, text, images } => {
       Data::Action(quote(api, &ctx.post_ref(&post)?, &text, &images).await?)
     }
+    Command::Retweeters { post, page } => {
+      let post = ctx.post_ref(&post)?;
+      Data::Users(
+        page
+          .collect(async |r| users::retweeters(api, &post, &r).await)
+          .await?,
+      )
+    }
     Command::List { list, page } => Data::Posts(
-      collect(page.limit, page.cursor, async |r| {
-        tweets::list(api, &list, &r).await
-      })
-      .await?,
+      page
+        .collect_dated(async |r| tweets::list(api, &list, &r).await)
+        .await?,
     ),
     Command::Folders { page } => Data::Collections(
-      collect(page.limit, page.cursor, async |r| {
-        users::folders(api, &r).await
-      })
-      .await?,
+      page
+        .collect(async |r| users::folders(api, &r).await)
+        .await?,
     ),
   })
 }

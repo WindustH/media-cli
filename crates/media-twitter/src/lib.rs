@@ -3,11 +3,14 @@
 //! Talks to the web client's GraphQL API with the session cookies
 //! (`auth_token`, `ct0`), or with a guest token when logged out (profiles,
 //! single tweets and user timelines). Collections are the user's
-//! lists; bookmark folders have their own `folders` command.
+//! lists; bookmark folders have their own `folders` command. Analytics come
+//! from the web client's analytics pages (`insights`).
 
 mod api;
+mod comments;
 mod extra;
 mod graphql;
+mod insights;
 mod notify;
 mod parse;
 mod refs;
@@ -23,8 +26,8 @@ mod write;
 use std::time::Duration;
 
 use media_core::{
-  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Notification, Page, PageReq,
-  Platform, PlatformInfo, Post, Query, Result, User,
+  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Insights, Notification, Page,
+  PageReq, Platform, PlatformInfo, Post, Query, Result, User,
 };
 
 use crate::api::Api;
@@ -38,7 +41,7 @@ impl Platform for Twitter {
     id: "twitter",
     name: "Twitter / X",
     aliases: &["x", "tw"],
-    about: "Twitter / X: tweets, replies, timelines, users and lists",
+    about: "Twitter / X: tweets, replies, timelines, users, lists and analytics",
     home: "https://x.com",
     cookie_domains: &["x.com", "twitter.com"],
     required_cookies: &["auth_token", "ct0"],
@@ -49,6 +52,9 @@ impl Platform for Twitter {
       Cap::Feed,
       Cap::Read,
       Cap::Comments,
+      Cap::Replies,
+      Cap::Likers,
+      Cap::Reposts,
       Cap::User,
       Cap::UserPosts,
       Cap::Followers,
@@ -65,6 +71,8 @@ impl Platform for Twitter {
       Cap::Publish,
       Cap::Delete,
       Cap::Download,
+      Cap::AccountInsights,
+      Cap::PostInsights,
     ],
     choices: Choices {
       search_sort: &["top", "latest"],
@@ -117,7 +125,21 @@ impl Platform for Twitter {
     sort: Option<&str>,
     page: &PageReq,
   ) -> Result<Page<Comment>> {
-    tweets::comments(&self.api, post, sort, page).await
+    comments::comments(&self.api, post, sort, page).await
+  }
+
+  async fn replies(&self, _post: &str, comment: &str, page: &PageReq) -> Result<Page<Comment>> {
+    comments::replies(&self.api, comment, page).await
+  }
+
+  /// Only the author sees the likers (likes are private since June 2024).
+  async fn likers(&self, post: &str, page: &PageReq) -> Result<Page<User>> {
+    users::likers(&self.api, post, page).await
+  }
+
+  /// Quotes; retweets have no post of their own (`retweeters` lists their accounts).
+  async fn reposts(&self, post: &str, page: &PageReq) -> Result<Page<Post>> {
+    tweets::quotes(&self.api, post, page).await
   }
 
   async fn user(&self, user: &str) -> Result<User> {
@@ -183,6 +205,14 @@ impl Platform for Twitter {
 
   async fn delete(&self, post: &str) -> Result<Action> {
     write::delete(&self.api, post, "delete").await
+  }
+
+  /// Full analytics need X Premium; see `insights` for what is left without it.
+  async fn insights(&self, post: Option<&str>, days: u32) -> Result<Insights> {
+    match post {
+      Some(post) => insights::post(&self.api, post, days).await,
+      None => insights::account(&self.api, days).await,
+    }
   }
 
   async fn run_extra(&self, command: Self::Extra) -> Result<Data> {

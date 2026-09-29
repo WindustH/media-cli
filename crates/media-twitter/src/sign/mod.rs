@@ -97,25 +97,6 @@ impl Material {
   }
 }
 
-/// URL of the `ondemand.s` chunk named in the page's webpack chunk map.
-pub fn ondemand_url(page: &str) -> Option<String> {
-  let index = Regex::new(r#",(\d+):["']ondemand\.s["']"#)
-    .ok()?
-    .captures(page)?
-    .get(1)?
-    .as_str()
-    .to_owned();
-  let hash = Regex::new(&format!(r#",{index}:"([0-9a-f]+)""#))
-    .ok()?
-    .captures(page)?
-    .get(1)?
-    .as_str()
-    .to_owned();
-  Some(format!(
-    "https://abs.twimg.com/responsive-web/client-web/ondemand.s.{hash}a.js"
-  ))
-}
-
 /// Byte indices from `(x[N], 16)` calls: the row index first, then the time factors.
 fn indices(ondemand: &str) -> Result<(usize, Vec<usize>)> {
   let re = Regex::new(r"(\(\w\[(\d{1,2})\],\s*16\))+").expect("valid regex");

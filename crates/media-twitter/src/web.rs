@@ -1,6 +1,7 @@
 //! Metadata taken from the live web client, cached in the store: the
 //! transaction-id material (page + `ondemand.s`) and fresh GraphQL query ids
-//! (scanned from `main.js`, completed by the community `placeholder.json`).
+//! (scanned from `main.js` and a few lazy chunks, completed by the community
+//! `placeholder.json`).
 
 use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;
@@ -11,11 +12,18 @@ use media_core::{Ctx, Error, Result, ValueExt};
 use regex::Regex;
 
 use crate::graphql::Op;
-use crate::sign::{self, Material};
+use crate::sign::Material;
 
 /// Serves the legacy web app (with the `ondemand.s` chunk map) with or without login;
 /// the logged-out home page moved to a new app without it.
 const APP_PAGE: &str = "https://x.com/i/jf/";
+const SCRIPTS: &str = "https://abs.twimg.com/responsive-web/client-web";
+/// Lazy chunks (named in the page's webpack chunk map) holding operations we
+/// use: `Favoriters` / `Retweeters`, and the Relay queries of the analytics pages.
+const LAZY_CHUNKS: &[&str] = &[
+  "shared~bundle.QuoteTweetActivity~bundle.TweetActivity",
+  "bundle.AccountAnalytics",
+];
 const PLACEHOLDER: &str = "https://raw.githubusercontent.com/fa0311/twitter-openapi/refs/heads/main/src/config/placeholder.json";
 
 const MATERIAL_KEY: &str = "transaction";
@@ -52,8 +60,8 @@ impl Web {
   async fn fresh_material(&self, ctx: &Ctx) -> Option<Rc<Material>> {
     let derived = async {
       let page = self.page(ctx).await?;
-      let url =
-        sign::ondemand_url(&page).ok_or_else(|| Error::upstream("no ondemand.s in the web app"))?;
+      let url = chunk_url(&page, "ondemand.s")
+        .ok_or_else(|| Error::upstream("no ondemand.s in the web app"))?;
       let script = fetch_text(ctx, &url).await?;
       Material::derive(&page, &script)
     };
@@ -108,12 +116,12 @@ impl Web {
     changed
   }
 
-  /// Live ids: `main.js` of the web app first, `placeholder.json` for the rest.
+  /// Live ids: the web app's scripts first, `placeholder.json` for the rest.
   async fn fresh_ids(&self, ctx: &Ctx) -> BTreeMap<String, String> {
     let mut ids = BTreeMap::new();
-    match self.scan_main(ctx).await {
+    match self.scan_scripts(ctx).await {
       Ok(found) => ids.extend(found),
-      Err(e) => tracing::debug!("scanning main.js failed: {e}"),
+      Err(e) => tracing::debug!("scanning the web app's scripts failed: {e}"),
     }
     match fetch_text(ctx, PLACEHOLDER)
       .await
@@ -132,23 +140,37 @@ impl Web {
     ids
   }
 
-  async fn scan_main(&self, ctx: &Ctx) -> Result<BTreeMap<String, String>> {
+  /// Query ids in `main.js` and [`LAZY_CHUNKS`]: classic operations
+  /// (`queryId`, `operationName`) and Relay ones (`params: {id, name}`).
+  async fn scan_scripts(&self, ctx: &Ctx) -> Result<BTreeMap<String, String>> {
     let page = self.page(ctx).await?;
-    let script =
+    let main =
       Regex::new(r#"https://abs\.twimg\.com/responsive-web/client-web[^"']*/main\.[0-9a-f]+\.js"#)
         .expect("valid regex")
         .find(&page)
         .ok_or_else(|| Error::upstream("no main.js in the web app"))?
         .as_str()
         .to_owned();
-    let js = fetch_text(ctx, &script).await?;
-    let op = Regex::new(r#"queryId:\s*"([A-Za-z0-9_-]+)"[^}]{0,200}?operationName:\s*"([^"]+)""#)
-      .expect("valid regex");
+    let lazy = LAZY_CHUNKS.iter().filter_map(|name| chunk_url(&page, name));
+    let patterns = [
+      r#"queryId:\s*"(?P<id>[A-Za-z0-9_-]+)"[^}]{0,200}?operationName:\s*"(?P<name>[^"]+)""#,
+      r#"params:\{id:"(?P<id>[A-Za-z0-9_-]+)",metadata:\{[^}]*\},name:"(?P<name>[^"]+)""#,
+    ]
+    .map(|p| Regex::new(p).expect("valid regex"));
     let mut ids = BTreeMap::new();
-    for c in op.captures_iter(&js) {
-      ids
-        .entry(c[2].to_owned())
-        .or_insert_with(|| c[1].to_owned());
+    for url in std::iter::once(main).chain(lazy) {
+      let js = match fetch_text(ctx, &url).await {
+        Ok(js) => js,
+        Err(e) => {
+          tracing::debug!("{url}: {e}");
+          continue;
+        }
+      };
+      for c in patterns.iter().flat_map(|p| p.captures_iter(&js)) {
+        ids
+          .entry(c["name"].to_owned())
+          .or_insert_with(|| c["id"].to_owned());
+      }
     }
     Ok(ids)
   }
@@ -162,6 +184,24 @@ impl Web {
     *self.page.borrow_mut() = Some(page.clone());
     Ok(page)
   }
+}
+
+/// URL of a lazy chunk, from the page's webpack chunk maps (`id:"name"`, `id:"hash"`).
+fn chunk_url(page: &str, name: &str) -> Option<String> {
+  let named = format!(r#"[,{{](\d+):["']{}["']"#, regex::escape(name));
+  let index = Regex::new(&named)
+    .ok()?
+    .captures(page)?
+    .get(1)?
+    .as_str()
+    .to_owned();
+  let hash = Regex::new(&format!(r#"[,{{]{index}:"([0-9a-f]+)""#))
+    .ok()?
+    .captures(page)?
+    .get(1)?
+    .as_str()
+    .to_owned();
+  Some(format!("{SCRIPTS}/{name}.{hash}a.js"))
 }
 
 async fn fetch_text(ctx: &Ctx, url: &str) -> Result<String> {
