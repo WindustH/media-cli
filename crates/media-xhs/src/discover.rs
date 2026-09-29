@@ -70,7 +70,8 @@ pub async fn search(c: &Client, q: &Query, page: &PageReq) -> Result<Page<Post>>
   let body = json!({
     "keyword": keyword,
     "page": page_no,
-    "page_size": page.size_within(20),
+    // The web client always asks for 20; other sizes get an empty answer.
+    "page_size": 20,
     "search_id": search_id,
     "sort": sort,
     "note_type": note_type,

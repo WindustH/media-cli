@@ -88,3 +88,25 @@ fn text(html: &str) -> Option<String> {
 fn time(v: &Value, keys: &[&str]) -> Option<jiff::Timestamp> {
   keys.iter().find_map(|k| v.i64(k)).and_then(from_unix)
 }
+
+/// Page data uses camelCase keys (`answerCount`); the API, and our parsers, snake_case.
+pub fn snake_keys(v: &Value) -> Value {
+  match v {
+    Value::Object(m) => Value::Object(m.iter().map(|(k, v)| (snake(k), snake_keys(v))).collect()),
+    Value::Array(a) => Value::Array(a.iter().map(snake_keys).collect()),
+    other => other.clone(),
+  }
+}
+
+fn snake(key: &str) -> String {
+  let mut out = String::with_capacity(key.len() + 4);
+  for c in key.chars() {
+    if c.is_ascii_uppercase() {
+      out.push('_');
+      out.push(c.to_ascii_lowercase());
+    } else {
+      out.push(c);
+    }
+  }
+  out
+}

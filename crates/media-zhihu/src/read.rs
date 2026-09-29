@@ -1,13 +1,14 @@
 //! Reading content: hot list, recommendations, search, posts, answers and topics.
 
-use media_core::{Collection, Ctx, Page, PageReq, Post, Query, Result, User, Value, ValueExt};
+use media_core::{
+  Collection, Ctx, Error, Page, PageReq, Post, Query, Result, User, Value, ValueExt,
+};
 
-use crate::api::{self, MOBILE, V3, V4, ZHUANLAN};
+use crate::api::{self, MOBILE, V3, V4, WWW, ZHUANLAN};
 use crate::parse;
 use crate::refs::Target;
 
 const ANSWER_INCLUDE: &str = "content,excerpt,voteup_count,comment_count,thanks_count,favlists_count,created_time,updated_time,author,question";
-const QUESTION_INCLUDE: &str = "author,answer_count,follower_count,visit_count,comment_count,created,updated_time,detail,excerpt,topics";
 
 /// The hot list (热榜). The web endpoint needs a login; the mobile one serves the same list anonymously.
 pub async fn hot(ctx: &Ctx) -> Result<Page<Post>> {
@@ -44,23 +45,31 @@ pub async fn feed(ctx: &Ctx, page: &PageReq) -> Result<Page<Post>> {
 }
 
 pub async fn read(ctx: &Ctx, target: &Target) -> Result<Post> {
-  let (url, include) = match target {
-    Target::Question(id) => (format!("{V4}/questions/{id}"), Some(QUESTION_INCLUDE)),
-    Target::Answer(id) => (format!("{V4}/answers/{id}"), Some(ANSWER_INCLUDE)),
-    Target::Article(id) => (format!("{ZHUANLAN}/articles/{id}"), None),
-    Target::Pin(id) => (format!("{V4}/pins/{id}"), None),
+  let (url, include, parse): (String, Option<&str>, fn(&Value) -> Post) = match target {
+    Target::Question(id) => return question(ctx, id).await,
+    Target::Answer(id) => (
+      format!("{V4}/answers/{id}"),
+      Some(ANSWER_INCLUDE),
+      parse::answer,
+    ),
+    Target::Article(id) => (format!("{ZHUANLAN}/articles/{id}"), None, parse::article),
+    Target::Pin(id) => (format!("{V4}/pins/{id}"), None, parse::pin),
   };
   let mut req = api::get(ctx, &url);
   if let Some(include) = include {
     req = req.query("include", include);
   }
-  let v = api::call(ctx, req).await?;
-  Ok(match target {
-    Target::Question(_) => parse::question(&v),
-    Target::Answer(_) => parse::answer(&v),
-    Target::Article(_) => parse::article(&v),
-    Target::Pin(_) => parse::pin(&v),
-  })
+  Ok(parse(&api::call(ctx, req).await?))
+}
+
+/// A question, from its page: the v4 endpoint demands `x-zse-96`.
+async fn question(ctx: &Ctx, id: &str) -> Result<Post> {
+  let state = api::page_state(ctx, &format!("{WWW}/question/{id}")).await?;
+  let question = state.at(&format!("entities.questions.{id}"));
+  if question.is_null() {
+    return Err(Error::not_found(format!("no question {id}")));
+  }
+  Ok(parse::question(&parse::snake_keys(question)))
 }
 
 /// Answers of a question, sorted by `default` (votes) or `created`.
@@ -153,8 +162,12 @@ pub async fn search_topics(ctx: &Ctx, q: &Query, page: &PageReq) -> Result<Page<
 // ── topics ────────────────────────────────────────────────────────────
 
 pub async fn topic(ctx: &Ctx, id: &str) -> Result<Collection> {
-  let v = api::call(ctx, api::get(ctx, &format!("{V4}/topics/{id}"))).await?;
-  Ok(parse::topic(&v))
+  let state = api::page_state(ctx, &format!("{WWW}/topic/{id}")).await?;
+  let topic = state.at(&format!("entities.topics.{id}"));
+  if topic.is_null() {
+    return Err(Error::not_found(format!("no topic {id}")));
+  }
+  Ok(parse::topic(&parse::snake_keys(topic)))
 }
 
 /// The topic's essence feed (精华).

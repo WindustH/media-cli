@@ -107,6 +107,39 @@ pub fn error(ctx: &Ctx, status: u16, body: &Value, text: &str) -> Error {
   }
 }
 
+/// `initialState` of a server-rendered page (`<script id="js-initialData">`).
+/// Some objects (questions, topics) are only served to unsigned clients this way:
+/// their v4 API endpoints demand the `x-zse-96` signature.
+pub async fn page_state(ctx: &Ctx, url: &str) -> Result<Value> {
+  need_login(ctx)?;
+  let resp = ctx
+    .http
+    .get(url)
+    .header("accept", "text/html,application/xhtml+xml")
+    .send()
+    .await?;
+  let html = resp.text();
+  if resp.url.contains("/account/unhuman") {
+    return Err(
+      Error::new(
+        ErrorCode::VerificationRequired,
+        "Zhihu wants a verification",
+      )
+      .with_hint(format!("pass the check in a browser: {}", resp.url)),
+    );
+  }
+  if !resp.status.is_success() {
+    return Err(error(ctx, resp.status.as_u16(), &Value::Null, &html));
+  }
+  let data = html
+    .split_once(r#"<script id="js-initialData" type="text/json">"#)
+    .and_then(|(_, rest)| rest.split_once("</script>"))
+    .map(|(json, _)| json)
+    .ok_or_else(|| Error::upstream(format!("no page data in {url}")))?;
+  let v: Value = serde_json::from_str(data)?;
+  Ok(v.at("initialState").clone())
+}
+
 /// The value of `key` in `paging.next`, unless the listing has ended.
 pub fn next_param(v: &Value, key: &str) -> Option<String> {
   let url = next_url(v)?;

@@ -7,14 +7,14 @@ use crate::api::Api;
 use crate::graphql::EXPLORE_TIMELINE;
 use crate::timeline::{self, Timeline, vars, with};
 
-/// Explore tab timeline ids (base64 of `Timeline:` + a thrift tab name).
+/// Explore tab timeline ids (padded base64 of `Timeline:` + a thrift tab name).
 fn timeline_id(category: Option<&str>) -> &'static str {
   match category {
-    Some("for-you") => "VGltZWxpbmU6DAC2CwABAAAAB2Zvcl95b3UAAA",
-    Some("news") => "VGltZWxpbmU6DAC2CwABAAAABG5ld3MAAA",
+    Some("for-you") => "VGltZWxpbmU6DAC2CwABAAAAB2Zvcl95b3UAAA==",
+    Some("news") => "VGltZWxpbmU6DAC2CwABAAAABG5ld3MAAA==",
     Some("sports") => "VGltZWxpbmU6DAC2CwABAAAABnNwb3J0cwAA",
-    Some("entertainment") => "VGltZWxpbmU6DAC2CwABAAAADWVudGVydGFpbm1lbnQAAA",
-    _ => "VGltZWxpbmU6DAC2CwABAAAACHRyZW5kaW5nAAA",
+    Some("entertainment") => "VGltZWxpbmU6DAC2CwABAAAADWVudGVydGFpbm1lbnQAAA==",
+    _ => "VGltZWxpbmU6DAC2CwABAAAACHRyZW5kaW5nAAA=",
   }
 }
 
