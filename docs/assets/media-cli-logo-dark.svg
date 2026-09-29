@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="440" height="112" viewBox="0 0 440 112" role="img" aria-label="media-cli">
+  <rect x="4" y="4" width="104" height="104" rx="24" fill="#1C2128" stroke="#30363D" stroke-width="2"/>
+  <path d="M28 38 L46 54 L28 70" fill="none" stroke="#E6EDF3" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M54 72 H76" stroke="#E6EDF3" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="30" cy="88" r="5" fill="#0066FF"/>
+  <circle cx="46" cy="88" r="5" fill="#FF2442"/>
+  <circle cx="62" cy="88" r="5" fill="#E6EDF3"/>
+  <circle cx="78" cy="88" r="5" fill="#FB7299"/>
+  <text x="132" y="72" fill="#E6EDF3" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="46" font-weight="700" letter-spacing="-1">media-cli</text>
+</svg>
