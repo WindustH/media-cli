@@ -9,6 +9,7 @@ mod account;
 mod api;
 mod comments;
 mod extra;
+mod insights;
 mod parse;
 mod people;
 mod publish;
@@ -21,8 +22,8 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use media_core::{
-  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Error, Notification, Page, PageReq,
-  Platform, PlatformInfo, Post, QrStatus, QrTicket, Query, Result, User,
+  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Error, Insights, Notification, Page,
+  PageReq, Platform, PlatformInfo, Post, QrStatus, QrTicket, Query, Result, User,
 };
 
 pub use extra::Extra;
@@ -51,6 +52,7 @@ impl Platform for Zhihu {
       Cap::Read,
       Cap::Comments,
       Cap::Replies,
+      Cap::Likers,
       Cap::User,
       Cap::UserPosts,
       Cap::Followers,
@@ -67,6 +69,8 @@ impl Platform for Zhihu {
       Cap::Publish,
       Cap::Delete,
       Cap::Download,
+      Cap::AccountInsights,
+      Cap::PostInsights,
     ],
     choices: Choices {
       search_sort: &["default", "upvoted", "newest"],
@@ -140,6 +144,10 @@ impl Platform for Zhihu {
   async fn replies(&self, post: &str, comment: &str, page: &PageReq) -> Result<Page<Comment>> {
     Target::parse(post)?;
     comments::children(&self.ctx, comment, page).await
+  }
+
+  async fn likers(&self, post: &str, page: &PageReq) -> Result<Page<User>> {
+    people::likers(&self.ctx, &Target::parse(post)?, page).await
   }
 
   async fn user(&self, user: &str) -> Result<User> {
@@ -220,6 +228,13 @@ impl Platform for Zhihu {
 
   async fn delete(&self, post: &str) -> Result<Action> {
     write::delete(&self.ctx, &Target::parse(post)?).await
+  }
+
+  async fn insights(&self, post: Option<&str>, days: u32) -> Result<Insights> {
+    match post {
+      Some(post) => insights::post(&self.ctx, &Target::parse(post)?, days).await,
+      None => insights::account(&self.ctx, days).await,
+    }
   }
 
   async fn run_extra(&self, command: Self::Extra) -> Result<Data> {

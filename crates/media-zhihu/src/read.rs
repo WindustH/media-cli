@@ -8,7 +8,7 @@ use crate::api::{self, MOBILE, V3, V4, WWW, ZHUANLAN};
 use crate::parse;
 use crate::refs::Target;
 
-const ANSWER_INCLUDE: &str = "content,excerpt,voteup_count,comment_count,thanks_count,favlists_count,created_time,updated_time,author,question";
+const ANSWER_INCLUDE: &str = "content,excerpt,voteup_count,comment_count,thanks_count,favlists_count,visit_count,reaction,created_time,updated_time,author,question";
 
 /// The hot list (热榜). The web endpoint needs a login; the mobile one serves the same list anonymously.
 pub async fn hot(ctx: &Ctx) -> Result<Page<Post>> {

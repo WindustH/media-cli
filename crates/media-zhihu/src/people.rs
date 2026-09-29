@@ -7,8 +7,9 @@ use media_core::{
 use crate::account;
 use crate::api::{self, V4};
 use crate::parse;
+use crate::refs::Target;
 
-const MEMBER_INCLUDE: &str = "answer_count,articles_count,pins_count,question_count,follower_count,following_count,voteup_count,thanked_count,favorited_count,is_following,is_followed,gender,badge,description,business,educations,employments,locations";
+const MEMBER_INCLUDE: &str = "answer_count,articles_count,pins_count,question_count,zvideo_count,columns_count,follower_count,following_count,following_question_count,following_topic_count,following_columns_count,following_favlists_count,voteup_count,thanked_count,favorited_count,included_answers_count,included_articles_count,is_following,is_followed,gender,badge,description,business,educations,employments,locations";
 const LIST_INCLUDE: &str =
   "data[*].answer_count,articles_count,follower_count,gender,is_followed,is_following,badge";
 
@@ -41,7 +42,7 @@ fn posts(v: &Value, map: fn(&Value) -> Post) -> Page<Post> {
 }
 
 pub async fn answers(ctx: &Ctx, token: &str, page: &PageReq) -> Result<Page<Post>> {
-  let include = "data[*].content,excerpt,voteup_count,comment_count,favlists_count,created_time,updated_time,question";
+  let include = "data[*].content,excerpt,voteup_count,comment_count,favlists_count,thanks_count,visit_count,reaction,created_time,updated_time,question";
   let path = format!("members/{token}/answers?sort_by=created");
   Ok(posts(
     &list(ctx, &path, Some(include), page).await?,
@@ -50,8 +51,7 @@ pub async fn answers(ctx: &Ctx, token: &str, page: &PageReq) -> Result<Page<Post
 }
 
 pub async fn articles(ctx: &Ctx, token: &str, page: &PageReq) -> Result<Page<Post>> {
-  let include =
-    "data[*].content,excerpt,voteup_count,comment_count,created,updated,image_url,topics";
+  let include = "data[*].content,excerpt,voteup_count,comment_count,favlists_count,reaction,created,updated,image_url,topics";
   let path = format!("members/{token}/articles?sort_by=created");
   Ok(posts(
     &list(ctx, &path, Some(include), page).await?,
@@ -73,6 +73,22 @@ pub async fn follows(ctx: &Ctx, token: &str, which: &str, page: &PageReq) -> Res
     page,
   )
   .await?;
+  Ok(Page::new(
+    v.list("data").iter().map(parse::user).collect(),
+    api::next_param(&v, "offset"),
+  ))
+}
+
+/// Users who upvoted (赞同) an answer, article or pin, newest first
+/// (`GET_UPVOTERS` of the web app, static.zhihu.com/heifetz/main.app.*.js).
+pub async fn likers(ctx: &Ctx, target: &Target, page: &PageReq) -> Result<Page<User>> {
+  if let Target::Question(_) = target {
+    return Err(Error::input(
+      "Zhihu lists upvoters of answers, articles and pins, not of questions",
+    ));
+  }
+  let path = format!("{}/{}/upvoters", target.plural(), target.id());
+  let v = list(ctx, &path, None, page).await?;
   Ok(Page::new(
     v.list("data").iter().map(parse::user).collect(),
     api::next_param(&v, "offset"),

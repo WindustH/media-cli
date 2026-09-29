@@ -5,6 +5,7 @@
 
 mod post;
 mod social;
+pub mod stats;
 
 use media_core::text::{from_unix, html_to_text};
 use media_core::{User, UserStats, Value, ValueExt};
@@ -43,8 +44,16 @@ pub fn user(v: &Value) -> User {
     ("articles", "articles_count"),
     ("pins", "pins_count"),
     ("questions", "question_count"),
+    ("videos", "zvideo_count"),
+    ("columns", "columns_count"),
     ("thanked", "thanked_count"),
     ("favorited", "favorited_count"),
+    ("following_questions", "following_question_count"),
+    ("following_topics", "following_topic_count"),
+    ("following_columns", "following_columns_count"),
+    ("following_favlists", "following_favlists_count"),
+    ("included_answers", "included_answers_count"),
+    ("included_articles", "included_articles_count"),
   ] {
     if let Some(n) = v.count(field) {
       u.stats.other.insert(key.into(), n);
