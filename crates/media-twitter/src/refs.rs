@@ -34,8 +34,13 @@ const RESERVED: &[&str] = &[
   "jobs",
 ];
 
+/// An x.com / twitter.com URL, also without its `https://`.
 fn parse_url(arg: &str) -> Option<Url> {
-  let url = Url::parse(arg).ok()?;
+  let url = if arg.contains("://") {
+    Url::parse(arg).ok()?
+  } else {
+    Url::parse(&format!("https://{arg}")).ok()?
+  };
   let host = url.host_str()?.trim_start_matches("www.");
   HOSTS.contains(&host).then_some(url)
 }
