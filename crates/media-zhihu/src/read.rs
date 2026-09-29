@@ -16,7 +16,7 @@ pub async fn hot(ctx: &Ctx) -> Result<Page<Post>> {
   } else {
     api::get(ctx, &format!("{MOBILE}/topstory/hot-lists/total"))
   };
-  let v = api::call(ctx, req.query("limit", 50)).await?;
+  let v = api::call_public(ctx, req.query("limit", 50)).await?;
   Ok(Page::last(
     v.list("data").iter().filter_map(parse::hot_item).collect(),
   ))
@@ -24,7 +24,6 @@ pub async fn hot(ctx: &Ctx) -> Result<Page<Post>> {
 
 /// The recommendation feed (推荐); the cursor is the query of `paging.next`.
 pub async fn feed(ctx: &Ctx, page: &PageReq) -> Result<Page<Post>> {
-  ctx.require_login(&["z_c0"])?;
   let base = format!("{V3}/feed/topstory/recommend");
   let req = match &page.cursor {
     Some(query) => api::get(ctx, &format!("{base}?{query}")),

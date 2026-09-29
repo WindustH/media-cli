@@ -10,7 +10,6 @@ use crate::parse;
 const QR_API: &str = "https://www.zhihu.com/api/v3/account/api/login/qrcode";
 
 pub async fn whoami(ctx: &Ctx) -> Result<User> {
-  ctx.require_login(&["z_c0"])?;
   let v = api::call(
     ctx,
     api::get(ctx, &format!("{V4}/me")).query(
@@ -68,7 +67,7 @@ pub async fn qr_start(ctx: &Ctx) -> Result<QrTicket> {
     .query("type", "captcha_sign_in")
     .send()
     .await?;
-  let v = api::call(
+  let v = api::call_public(
     ctx,
     api::post(ctx, QR_API)
       .header("referer", format!("{WWW}/signin"))
@@ -153,7 +152,6 @@ fn absorb_cookies(ctx: &Ctx, v: &Value) {
 
 /// Unread counters, as reported on the logged-in account.
 pub async fn unread(ctx: &Ctx) -> Result<BTreeMap<String, u64>> {
-  ctx.require_login(&["z_c0"])?;
   let v = api::call(
     ctx,
     api::get(ctx, &format!("{V4}/me")).query(

@@ -6,7 +6,9 @@
 //!
 //! Zhihu additionally signs web requests with `x-zse-93` / `x-zse-96`
 //! (derived from the `d_c0` cookie and the path). Logged-in sessions work
-//! without it; anonymous API calls are refused (`10003`) or flagged (`40352`).
+//! without it; anonymous API calls are refused (`10003`), and after a few of
+//! them the IP is flagged (`40352`). So [`call`] requires a session and only
+//! the hot list and the login flow go through [`call_public`].
 
 use http::Method;
 use media_core::http::Req;
@@ -21,6 +23,15 @@ pub const ZHUANLAN: &str = "https://zhuanlan.zhihu.com/api";
 pub const MOBILE: &str = "https://api.zhihu.com";
 
 const LOGIN_HINT: &str = "run `media zhihu login` first";
+
+/// Fail early without the `z_c0` session cookie.
+pub fn need_login(ctx: &Ctx) -> Result<()> {
+  ctx.require_login(&["z_c0"]).map_err(|e| {
+    e.with_hint(format!(
+      "Zhihu serves this to logged-in sessions only; {LOGIN_HINT}"
+    ))
+  })
+}
 
 pub fn request<'a>(ctx: &'a Ctx, method: Method, url: &str) -> Req<'a> {
   let req = ctx
@@ -45,8 +56,14 @@ pub fn delete<'a>(ctx: &'a Ctx, url: &str) -> Req<'a> {
   request(ctx, Method::DELETE, url)
 }
 
-/// Send and return the JSON body (`Null` for empty 2xx bodies), or the mapped error.
+/// Send with the logged-in session; see [`call_public`].
 pub async fn call(ctx: &Ctx, req: Req<'_>) -> Result<Value> {
+  need_login(ctx)?;
+  call_public(ctx, req).await
+}
+
+/// Send and return the JSON body (`Null` for empty 2xx bodies), or the mapped error.
+pub async fn call_public(ctx: &Ctx, req: Req<'_>) -> Result<Value> {
   let resp = req.send().await?;
   let body: Option<Value> = serde_json::from_slice(&resp.body).ok();
   if resp.status.is_success() && body.as_ref().is_none_or(|b| !b["error"].is_object()) {

@@ -11,7 +11,7 @@ use crate::refs::Target;
 
 /// Writes need a login and the CSRF cookie; pause a little like a person would.
 pub async fn prepare(ctx: &Ctx) -> Result<()> {
-  ctx.require_login(&["z_c0"])?;
+  api::need_login(ctx)?;
   account::helper_cookies(ctx).await?;
   ctx
     .http

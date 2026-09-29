@@ -127,7 +127,6 @@ pub async fn folder_items(ctx: &Ctx, folder: &str, page: &PageReq) -> Result<Pag
 }
 
 pub async fn notifications(ctx: &Ctx, page: &PageReq) -> Result<Page<Notification>> {
-  ctx.require_login(&["z_c0"])?;
   let v = list(ctx, "notifications/v2/recent?entry_name=all", None, page).await?;
   Ok(Page::new(
     v.list("data").iter().map(parse::notification).collect(),

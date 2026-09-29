@@ -63,17 +63,20 @@ pub fn user(v: &Value) -> User {
   u
 }
 
-/// Author of a post or comment; anonymous authors keep only their name.
+/// Author of a post or comment. Anonymous authors (id `0`) keep only their
+/// name, and the `用户` placeholder of hidden question askers is dropped.
 fn author(v: &Value) -> Option<User> {
   let v = [v.at("author.member"), v.at("author")]
     .into_iter()
     .find(|a| a.str("name").is_some())?;
-  let mut u = user(v);
-  if u.id == "0" || u.id.is_empty() {
-    u.url = None;
-    u.handle = None;
+  let u = user(v);
+  if u.id != "0" && !u.id.is_empty() {
+    return Some(u);
   }
-  Some(u)
+  (u.name != "用户").then(|| User {
+    name: u.name,
+    ..User::default()
+  })
 }
 
 /// Rendered text of an HTML body, `None` when empty.
