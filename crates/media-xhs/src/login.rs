@@ -5,7 +5,7 @@
 use std::cell::Cell;
 use std::time::Duration;
 
-use media_core::{Error, QrStatus, QrTicket, Result, Value, ValueExt, json};
+use media_core::{Error, ErrorCode, QrStatus, QrTicket, Result, Value, ValueExt, json};
 
 use crate::api::Client;
 use crate::people::ME;
@@ -71,7 +71,10 @@ pub async fn qr_poll(c: &Client, ticket: &QrTicket, errors: &Cell<u32>) -> Resul
 /// Finish the login until the session belongs to the confirmed user.
 async fn complete(c: &Client, qr_id: &str, code: &str, user: &str) -> Result<()> {
   for attempt in 0..5 {
-    let data = c.get(STATUS, &[("qr_id", qr_id), ("code", code)]).await?;
+    let data = c
+      .get(STATUS, &[("qr_id", qr_id), ("code", code)])
+      .await
+      .map_err(new_device_captcha)?;
     c.apply_session(&data);
     if user_id(&data).as_deref() == Some(user) {
       return Ok(());
@@ -88,6 +91,19 @@ async fn complete(c: &Client, qr_id: &str, code: &str, user: &str) -> Result<()>
   Err(Error::auth(
     "QR login confirmed, but the session never switched to the confirmed user",
   ))
+}
+
+/// A captcha after the phone confirmed: Xiaohongshu distrusts the fresh device
+/// the CLI logs in with, and a captcha cannot be solved from here.
+fn new_device_captcha(e: Error) -> Error {
+  if e.code != ErrorCode::VerificationRequired {
+    return e;
+  }
+  Error::new(
+    ErrorCode::VerificationRequired,
+    "the phone confirmed the login, but Xiaohongshu wants a captcha before it trusts this new device",
+  )
+  .with_hint("log in at xiaohongshu.com in a browser, then run `media xhs login --browser`")
 }
 
 fn user_id(v: &Value) -> Option<String> {

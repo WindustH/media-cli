@@ -34,6 +34,7 @@ pub fn import(browser: Option<&str>, domains: &[&str]) -> Result<Vec<(String, Co
     }
     None => BROWSERS.to_vec(),
   };
+  let wanted = domains;
   let domains: Vec<String> = domains.iter().map(|d| d.to_string()).collect();
   let mut found = Vec::new();
   for name in names {
@@ -52,11 +53,7 @@ pub fn import(browser: Option<&str>, domains: &[&str]) -> Result<Vec<(String, Co
     };
     match loader(Some(domains.clone())) {
       Ok(list) => {
-        let mut jar = Cookies::new();
-        // Later entries win; prefer non-empty values.
-        for c in list.into_iter().filter(|c| !c.value.is_empty()) {
-          jar.insert(c.name, c.value);
-        }
+        let jar = pick(list, wanted);
         if !jar.is_empty() {
           found.push((name.to_owned(), jar));
         }
@@ -65,6 +62,43 @@ pub fn import(browser: Option<&str>, domains: &[&str]) -> Result<Vec<(String, Co
     }
   }
   Ok(found)
+}
+
+/// One value per cookie name. Browsers filter domains by substring (`x.com`
+/// also matches `netflix.com`), so keep only the platform's own domains; among
+/// duplicates prefer the earlier listed domain, the domain itself over its
+/// subdomains, then the cookie that expires last (the newest).
+#[cfg(feature = "browser")]
+fn pick(list: Vec<rookie::enums::Cookie>, wanted: &[&str]) -> Cookies {
+  use std::cmp::Reverse;
+  use std::collections::BTreeMap;
+
+  // Lower is better: (domain index, is a subdomain, newest expiry first).
+  type Rank = (usize, bool, Reverse<u64>);
+  let mut best: BTreeMap<String, (Rank, String)> = BTreeMap::new();
+  for c in list.into_iter().filter(|c| !c.value.is_empty()) {
+    let host = c.domain.trim_start_matches('.').to_ascii_lowercase();
+    let Some((index, sub)) = wanted.iter().enumerate().find_map(|(i, d)| {
+      if host == *d {
+        Some((i, false))
+      } else if host.ends_with(&format!(".{d}")) {
+        Some((i, true))
+      } else {
+        None
+      }
+    }) else {
+      continue;
+    };
+    // Session cookies (no expiry) are as fresh as it gets.
+    let rank = (index, sub, Reverse(c.expires.unwrap_or(u64::MAX)));
+    if best.get(&c.name).is_none_or(|(r, _)| rank < *r) {
+      best.insert(c.name, (rank, c.value));
+    }
+  }
+  best
+    .into_iter()
+    .map(|(name, (_, value))| (name, value))
+    .collect()
 }
 
 #[cfg(not(feature = "browser"))]

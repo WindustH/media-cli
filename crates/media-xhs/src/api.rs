@@ -222,7 +222,7 @@ impl Client {
           format!("Xiaohongshu requires a captcha (type {kind}, uuid {uuid})"),
         )
         .with_hint(
-          "open xiaohongshu.com in a browser with this account, pass the check, then retry",
+          "pass the check at xiaohongshu.com in your browser, then retry; if this session did not come from that browser, run `media xhs login --browser`",
         ),
       );
     }
