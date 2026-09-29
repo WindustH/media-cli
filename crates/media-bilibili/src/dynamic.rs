@@ -3,6 +3,7 @@
 
 use std::path::Path;
 
+use media_core::file::Image;
 use media_core::http::Part;
 use media_core::{Action, Ctx, Draft, Error, Page, PageReq, Post, Result, Value, ValueExt, json};
 
@@ -92,28 +93,10 @@ pub async fn read(ctx: &Ctx, id: &str) -> Result<Post> {
 
 // ── writes ───────────────────────────────────────────────────────────────
 
-fn mime(path: &Path) -> &'static str {
-  match path
-    .extension()
-    .and_then(|e| e.to_str())
-    .map(str::to_ascii_lowercase)
-    .as_deref()
-  {
-    Some("png") => "image/png",
-    Some("gif") => "image/gif",
-    Some("webp") => "image/webp",
-    _ => "image/jpeg",
-  }
-}
-
 async fn upload(ctx: &Ctx, path: &Path) -> Result<Value> {
-  let data = tokio::fs::read(path).await?;
-  let name = path
-    .file_name()
-    .map(|n| n.to_string_lossy().into_owned())
-    .unwrap_or_else(|| "image.jpg".into());
+  let image = Image::read(path).await?;
   let parts = vec![
-    Part::file("file_up", data, &name, mime(path)),
+    Part::file("file_up", image.data, &image.name, image.mime),
     Part::text("biz", "new_dyn"),
     Part::text("category", "daily"),
   ];

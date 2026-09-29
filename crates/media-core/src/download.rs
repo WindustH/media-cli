@@ -124,7 +124,7 @@ async fn fix_extension(path: PathBuf) -> PathBuf {
     f.read(&mut head).await
   };
   let Ok(n) = read.await else { return path };
-  let Some(ext) = sniff(&head[..n]) else {
+  let Some(ext) = crate::file::sniff(&head[..n]) else {
     return path;
   };
   let current = path.extension().and_then(|e| e.to_str()).unwrap_or("");
@@ -136,39 +136,6 @@ async fn fix_extension(path: PathBuf) -> PathBuf {
     Ok(()) => renamed,
     Err(_) => path,
   }
-}
-
-fn sniff(head: &[u8]) -> Option<&'static str> {
-  Some(match head {
-    [0xFF, 0xD8, 0xFF, ..] => "jpg",
-    [0x89, b'P', b'N', b'G', ..] => "png",
-    [b'G', b'I', b'F', b'8', ..] => "gif",
-    [
-      b'R',
-      b'I',
-      b'F',
-      b'F',
-      _,
-      _,
-      _,
-      _,
-      b'W',
-      b'E',
-      b'B',
-      b'P',
-      ..,
-    ] => "webp",
-    [0x1A, 0x45, 0xDF, 0xA3, ..] => "webm",
-    [b'F', b'L', b'V', ..] => "flv",
-    [_, _, _, _, b'f', b't', b'y', b'p', b0, b1, b2, b3, ..] => match &[*b0, *b1, *b2, *b3] {
-      b"heic" | b"heix" | b"heim" | b"heis" | b"mif1" | b"msf1" => "heic",
-      b"avif" | b"avis" => "avif",
-      b"M4A " => "m4a",
-      b"qt  " => "mov",
-      _ => "mp4",
-    },
-    _ => return None,
-  })
 }
 
 async fn fetch(ctx: &Ctx, referer: &str, url: &str, path: &Path) -> Result<u64> {

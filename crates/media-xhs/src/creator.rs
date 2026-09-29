@@ -4,6 +4,7 @@
 use std::path::Path;
 use std::time::Duration;
 
+use media_core::file::Image;
 use media_core::{
   Action, Collection, Draft, Error, ErrorCode, Page, PageReq, Post, Query, Result, User, Value,
   ValueExt, json,
@@ -168,24 +169,9 @@ async fn upload_image(c: &Client, path: &Path) -> Result<String> {
   let (Some(file_id), Some(token)) = (permit.str("fileIds.0"), permit.str("token")) else {
     return Err(Error::upstream("upload permit without file id or token"));
   };
-  let bytes = tokio::fs::read(path).await?;
-  c.upload(&file_id, &token, bytes, mime(path)).await?;
+  let image = Image::read(path).await?;
+  c.upload(&file_id, &token, image.data, image.mime).await?;
   Ok(file_id)
-}
-
-fn mime(path: &Path) -> &'static str {
-  let ext = path
-    .extension()
-    .map(|e| e.to_string_lossy().to_ascii_lowercase())
-    .unwrap_or_default();
-  match ext.as_str() {
-    "jpg" | "jpeg" => "image/jpeg",
-    "png" => "image/png",
-    "webp" => "image/webp",
-    "gif" => "image/gif",
-    "heic" => "image/heic",
-    _ => "application/octet-stream",
-  }
 }
 
 // ── own notes ───────────────────────────────────────────────────────────

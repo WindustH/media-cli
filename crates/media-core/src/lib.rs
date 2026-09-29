@@ -12,6 +12,7 @@ pub mod browser;
 pub mod cli;
 pub mod download;
 pub mod error;
+pub mod file;
 pub mod http;
 pub mod json;
 pub mod model;

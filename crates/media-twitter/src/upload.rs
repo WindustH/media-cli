@@ -5,6 +5,7 @@ use std::path::Path;
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
+use media_core::file::Image;
 use media_core::{Error, Result, ValueExt};
 
 use crate::api::Api;
@@ -12,26 +13,22 @@ use crate::api::Api;
 const UPLOAD: &str = "https://upload.twitter.com/i/media/upload.json";
 const MAX_BYTES: u64 = 5 * 1024 * 1024;
 
-fn mime(path: &Path) -> Option<&'static str> {
-  let ext = path.extension()?.to_str()?.to_ascii_lowercase();
-  Some(match ext.as_str() {
-    "jpg" | "jpeg" => "image/jpeg",
-    "png" => "image/png",
-    "gif" => "image/gif",
-    "webp" => "image/webp",
-    _ => return None,
-  })
-}
-
 /// Upload one image; returns its media id.
 pub async fn image(api: &Api, path: &Path) -> Result<String> {
-  let media_type = mime(path).ok_or_else(|| {
-    Error::input(format!(
+  let Image {
+    data,
+    mime: media_type,
+    ..
+  } = Image::read(path).await?;
+  if !matches!(
+    media_type,
+    "image/jpeg" | "image/png" | "image/gif" | "image/webp"
+  ) {
+    return Err(Error::input(format!(
       "unsupported image {} (jpeg, png, gif or webp)",
       path.display()
-    ))
-  })?;
-  let data = std::fs::read(path)?;
+    )));
+  }
   let size = data.len() as u64;
   if size > MAX_BYTES {
     return Err(Error::input(format!(
