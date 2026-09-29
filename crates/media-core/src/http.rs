@@ -17,7 +17,7 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 use tokio::io::AsyncWriteExt;
 use wreq::header::{HeaderMap, HeaderName, HeaderValue};
-use wreq::{Method, StatusCode};
+pub use wreq::{Method, StatusCode};
 
 use crate::error::{Error, ErrorCode, Result};
 
@@ -131,6 +131,16 @@ impl Http {
       cookies: true,
       throttle: true,
       retries,
+    }
+  }
+
+  /// Where a (short) link finally leads, following redirects without cookies.
+  /// Tries HEAD first and falls back to GET for servers that refuse HEAD.
+  pub async fn final_url(&self, url: &str) -> Result<String> {
+    let head = self.request(Method::HEAD, url).no_cookies().send().await;
+    match head {
+      Ok(r) if r.status.is_success() => Ok(r.url),
+      _ => Ok(self.get(url).no_cookies().send().await?.url),
     }
   }
 

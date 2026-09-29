@@ -71,9 +71,9 @@ pub async fn post(ctx: &Ctx, input: &str) -> Result<PostRef> {
     } else {
       format!("https://{input}")
     };
-    let resp = ctx.http.get(url).no_cookies().send().await?;
-    return parse_post(&resp.url)
-      .ok_or_else(|| Error::input(format!("short link did not lead to a post: {}", resp.url)));
+    let target = ctx.http.final_url(&url).await?;
+    return parse_post(&target)
+      .ok_or_else(|| Error::input(format!("short link did not lead to a post: {target}")));
   }
   parse_post(input).ok_or_else(|| {
     Error::input(format!(

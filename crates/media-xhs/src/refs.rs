@@ -147,8 +147,8 @@ fn is_short_link(arg: &str) -> bool {
 
 /// Follow an xhslink.com short link to the page it points at.
 async fn expand(c: &Client, link: &str) -> Result<String> {
-  let resp = c.ctx.http.get(link).no_cookies().send().await?;
-  let url = url::Url::parse(&resp.url)
+  let target = c.ctx.http.final_url(link).await?;
+  let url = url::Url::parse(&target)
     .map_err(|e| Error::upstream(format!("short link led to a bad URL: {e}")))?;
   // Login walls wrap the target page in `redirectPath`.
   let wrapped = url
@@ -158,7 +158,7 @@ async fn expand(c: &Client, link: &str) -> Result<String> {
       true => format!("{HOME}{v}"),
       false => v.into_owned(),
     });
-  Ok(wrapped.unwrap_or(resp.url))
+  Ok(wrapped.unwrap_or(target))
 }
 
 /// Resolve a note argument: short links are followed, a missing token comes

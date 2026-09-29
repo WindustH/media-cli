@@ -157,7 +157,7 @@ impl Client {
     self
       .ctx
       .http
-      .request(http::Method::PUT, format!("{UPLOAD}/{file_id}"))
+      .request(media_core::http::Method::PUT, format!("{UPLOAD}/{file_id}"))
       .header("x-cos-security-token", token)
       .bytes(data, mime)
       .no_cookies()

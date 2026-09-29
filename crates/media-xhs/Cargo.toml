@@ -11,7 +11,6 @@ base64.workspace = true
 cbc.workspace = true
 clap.workspace = true
 flate2 = "1"
-http = "1"
 md-5.workspace = true
 media-core.workspace = true
 rand.workspace = true
