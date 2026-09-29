@@ -89,6 +89,17 @@ impl Api {
     self.check(resp)
   }
 
+  /// GET an endpoint of `oauth.reddit.com` only (`/api/v1/me/karma`): with
+  /// the web app's bearer on a cookie session, like [`Api::get`] otherwise.
+  pub async fn get_oauth(&self, path: &str, query: &[(&str, String)]) -> Result<Value> {
+    let Some(token) = self.web_token().await else {
+      return self.get(path, query).await;
+    };
+    let req = self.bearer(Method::GET, path, &token);
+    let req = req.queries(query.iter().map(|(k, v)| (*k, v)));
+    self.check(req.query("raw_json", 1).send().await?)
+  }
+
   /// POST a form to the classic API: a write (login, pause, CSRF, `api_type=json`).
   pub async fn post(&self, path: &str, form: Params<'_>) -> Result<Value> {
     self.write(path, Body::Form(form)).await

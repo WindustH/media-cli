@@ -10,7 +10,7 @@ use media_core::{Collection, Metrics, Notification, Post, User, UserStats, Value
 use crate::api::WWW;
 use crate::refs::{post_url, sub_url, user_url};
 
-pub use comment::{comment, comments};
+pub use comment::{comment, comment_node};
 pub use media::reddit_video;
 
 /// The `data` of a thing of this kind.
@@ -80,13 +80,7 @@ fn post_at(d: &Value, depth: usize) -> Option<Post> {
     created_at: time(d, "created_utc"),
     // `edited` is `false` or the time of the last edit.
     updated_at: time(d, "edited"),
-    metrics: Metrics {
-      views: d.count("view_count"),
-      likes: d.u64("score"),
-      comments: d.count("num_comments"),
-      shares: d.count("num_crossposts").filter(|n| *n > 0),
-      ..Metrics::default()
-    },
+    metrics: metrics(d),
     media: media::of(d),
     quoted: quoted.and_then(|q| post_at(q, depth + 1)).map(Box::new),
     raw: Some(d.clone()),
@@ -98,13 +92,45 @@ fn post_at(d: &Value, depth: usize) -> Option<Post> {
   put(x, "flair", d.str("link_flair_text").map(Value::from));
   put(x, "score", d.i64("score").map(Value::from));
   put(x, "upvote_ratio", d.f64("upvote_ratio").map(Value::from));
+  put(
+    x,
+    "subreddit_subscribers",
+    d.u64("subreddit_subscribers").map(Value::from),
+  );
   put(x, "nsfw", Some(d.bool("over_18").unwrap_or(false).into()));
+  // `deleted` (by the author), `moderator`, `reddit`, `automod_filtered` ...
+  put(x, "removed", d.str("removed_by_category").map(Value::from));
   put(x, "link", link(d).map(Value::from));
   put(x, "vote", vote(d));
   for key in ["spoiler", "stickied", "locked", "archived", "saved"] {
     put(x, key, flag(d, key));
   }
   Some(post)
+}
+
+/// Every counter of a post. `likes` is the score (upvotes minus downvotes;
+/// `ups` carries the same number and `downs` is always 0); the author's own
+/// views and shares are in `insights`.
+fn metrics(d: &Value) -> Metrics {
+  let mut m = Metrics {
+    views: d.count("view_count"),
+    likes: d.u64("score"),
+    comments: d.count("num_comments"),
+    ..Metrics::default()
+  };
+  // `gilded` (legacy gold) and `num_reports` (moderators only) are mostly empty.
+  let counters = [
+    ("crossposts", "num_crossposts", false),
+    ("awards", "total_awards_received", false),
+    ("gilded", "gilded", true),
+    ("reports", "num_reports", true),
+  ];
+  for (name, key, skip_zero) in counters {
+    if let Some(n) = d.u64(key).filter(|n| *n > 0 || !skip_zero) {
+      m.other.insert(name.into(), n);
+    }
+  }
+  m
 }
 
 /// The linked page of a link post (not Reddit's own media or the post itself).
@@ -127,7 +153,12 @@ pub fn user(d: &Value) -> Option<User> {
     likes: d.count("total_karma"),
     ..UserStats::default()
   };
-  for key in ["link_karma", "comment_karma"] {
+  for key in [
+    "link_karma",
+    "comment_karma",
+    "awarder_karma",
+    "awardee_karma",
+  ] {
     if let Some(n) = d.count(key) {
       stats.other.insert(key.into(), n);
     }

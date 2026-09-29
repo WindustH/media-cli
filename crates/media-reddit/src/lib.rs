@@ -4,18 +4,22 @@
 //! with the cookies of a browser session, and writes through the classic API
 //! with the session's modhash; OAuth "script" app credentials in the
 //! environment switch both to `oauth.reddit.com` (see [`api`]). Posts are
-//! `t3` things, comments `t1`; collections are subreddits.
+//! `t3` things, comments `t1`; collections are subreddits. Comment threads
+//! are loaded completely ([`comments`]); analytics are in [`insights`].
 
 mod api;
 mod comments;
 mod extra;
 mod inbox;
+mod insights;
 mod listing;
 mod oauth;
 mod parse;
 mod posts;
+mod poststats;
 mod refs;
 mod subs;
+mod thread;
 mod upload;
 mod users;
 mod video;
@@ -25,14 +29,15 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use media_core::{
-  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Error, Media, Notification, Page,
-  PageReq, Platform, PlatformInfo, Post, Query, Result, User,
+  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Error, Insights, Media,
+  Notification, Page, PageReq, Platform, PlatformInfo, Post, Query, Result, User,
 };
 
 use crate::api::Api;
 
 pub struct Reddit {
   api: Api,
+  threads: comments::Threads,
 }
 
 impl Platform for Reddit {
@@ -53,6 +58,7 @@ impl Platform for Reddit {
       Cap::Read,
       Cap::Comments,
       Cap::Replies,
+      Cap::Reposts,
       Cap::User,
       Cap::UserPosts,
       Cap::Collections,
@@ -68,6 +74,8 @@ impl Platform for Reddit {
       Cap::Publish,
       Cap::Delete,
       Cap::Download,
+      Cap::AccountInsights,
+      Cap::PostInsights,
     ],
     choices: Choices {
       search_sort: posts::SEARCH_SORTS,
@@ -83,7 +91,10 @@ impl Platform for Reddit {
   type Extra = extra::Command;
 
   fn new(ctx: Ctx) -> Result<Self> {
-    Ok(Self { api: Api::new(ctx) })
+    Ok(Self {
+      api: Api::new(ctx),
+      threads: comments::Threads::default(),
+    })
   }
 
   fn ctx(&self) -> &Ctx {
@@ -133,11 +144,15 @@ impl Platform for Reddit {
     sort: Option<&str>,
     page: &PageReq,
   ) -> Result<Page<Comment>> {
-    comments::list(&self.api, post, sort, page).await
+    comments::list(&self.api, &self.threads, post, sort, page).await
   }
 
-  async fn replies(&self, post: &str, comment: &str, page: &PageReq) -> Result<Page<Comment>> {
-    comments::replies(&self.api, post, comment, page).await
+  async fn replies(&self, post: &str, comment: &str, _page: &PageReq) -> Result<Page<Comment>> {
+    comments::replies(&self.api, &self.threads, post, comment).await
+  }
+
+  async fn reposts(&self, post: &str, page: &PageReq) -> Result<Page<Post>> {
+    posts::crossposts(&self.api, post, page).await
   }
 
   async fn user(&self, user: &str) -> Result<User> {
@@ -203,6 +218,13 @@ impl Platform for Reddit {
 
   async fn delete(&self, post: &str) -> Result<Action> {
     write::delete_post(&self.api, post).await
+  }
+
+  async fn insights(&self, post: Option<&str>, days: u32) -> Result<Insights> {
+    match post {
+      Some(post) => insights::post(&self.api, post).await,
+      None => insights::account(&self.api, days).await,
+    }
   }
 
   async fn media(&self, post: &str, _audio_only: bool) -> Result<(Post, Vec<Media>)> {

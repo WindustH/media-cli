@@ -3,7 +3,6 @@
 
 use clap::builder::PossibleValuesParser;
 use media_core::cli::PageArgs;
-use media_core::paging::collect;
 use media_core::{Data, Page, Result};
 
 use crate::api::Api;
@@ -69,19 +68,19 @@ pub async fn run(api: &Api, command: Command) -> Result<Data> {
       time,
       page,
     } => Data::Posts(
-      collect(page.limit, page.cursor, async |r| {
-        posts::subreddit(api, &subreddit, &sort, time.as_deref(), &r).await
-      })
-      .await?,
+      page
+        .collect_dated(async |r| {
+          posts::subreddit(api, &subreddit, &sort, time.as_deref(), &r).await
+        })
+        .await?,
     ),
     C::Subreddit { subreddit } => {
       Data::Collections(Page::last(vec![subs::about(api, &subreddit).await?]))
     }
     C::Subreddits { which, page } => Data::Collections(
-      collect(page.limit, page.cursor, async |r| {
-        subs::listed(api, &which, &r).await
-      })
-      .await?,
+      page
+        .collect(async |r| subs::listed(api, &which, &r).await)
+        .await?,
     ),
     C::Downvote { post, undo } => {
       let (dir, name) = if undo {
@@ -94,10 +93,9 @@ pub async fn run(api: &Api, command: Command) -> Result<Data> {
     C::UserComments { user, page } => {
       let user = ctx.user_ref(&user)?;
       Data::Comments(
-        collect(page.limit, page.cursor, async |r| {
-          users::comments(api, &user, &r).await
-        })
-        .await?,
+        page
+          .collect_dated(async |r| users::comments(api, &user, &r).await)
+          .await?,
       )
     }
     C::Edit { post, text } => Data::Action(write::edit(api, &ctx.post_ref(&post)?, &text).await?),
