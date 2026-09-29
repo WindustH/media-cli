@@ -1,0 +1,53 @@
+[package]
+name = "media-cli"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "One command line for Zhihu, Xiaohongshu, Twitter/X and Bilibili"
+
+[[bin]]
+name = "media"
+path = "src/main.rs"
+
+[workspace]
+members = [".", "crates/*"]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[workspace.dependencies]
+media-core = { path = "crates/media-core" }
+media-zhihu = { path = "crates/media-zhihu" }
+media-xhs = { path = "crates/media-xhs" }
+media-twitter = { path = "crates/media-twitter" }
+media-bilibili = { path = "crates/media-bilibili" }
+
+aes = "0.8"
+base64 = "0.22"
+cbc = "0.1"
+clap = { version = "4.6", features = ["derive", "env", "wrap_help"] }
+jiff = { version = "0.2", features = ["serde"] }
+md-5 = "0.10"
+rand = "0.9"
+regex = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+sha1 = "0.10"
+sha2 = "0.10"
+tokio = { version = "1", features = ["rt", "macros", "time", "fs", "io-util", "process"] }
+tracing = "0.1"
+url = "2"
+
+[dependencies]
+media-core.workspace = true
+media-zhihu.workspace = true
+media-xhs.workspace = true
+media-twitter.workspace = true
+media-bilibili.workspace = true
+
+[profile.release]
+lto = "thin"
+strip = true
