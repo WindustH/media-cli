@@ -88,8 +88,10 @@ impl Api {
         let mut req = self
           .request(Method::Get, &url)
           .await?
-          .query("variables", &variables)
-          .query("features", op.features(true));
+          .query("variables", &variables);
+        if !op.features.is_empty() {
+          req = req.query("features", op.features(true));
+        }
         if let Some(t) = op.field_toggles() {
           req = req.query("fieldToggles", t);
         }
