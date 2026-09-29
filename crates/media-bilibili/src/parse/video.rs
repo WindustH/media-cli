@@ -16,11 +16,13 @@ pub fn duration(v: &Value, paths: &[&str]) -> Option<u64> {
   })
 }
 
+/// Counters under the names each shape uses (`view.stat`, space `vlist`,
+/// search results, favorites `cnt_info`).
 fn metrics(v: &Value) -> Metrics {
   let mut m = Metrics {
     views: v.first_count(&["stat.view", "stat.play", "play", "cnt_info.play"]),
     likes: v.first_count(&["stat.like", "like", "cnt_info.thumb_up"]),
-    comments: v.first_count(&["stat.reply", "comment", "review"]),
+    comments: v.first_count(&["stat.reply", "comment", "review", "cnt_info.reply"]),
     shares: v.first_count(&["stat.share", "cnt_info.share"]),
     favorites: v.first_count(&["stat.favorite", "favorites", "cnt_info.collect"]),
     ..Metrics::default()
@@ -28,7 +30,13 @@ fn metrics(v: &Value) -> Metrics {
   if let Some(n) = v.first_count(&["stat.coin", "cnt_info.coin"]) {
     m.other.insert("coins".into(), n);
   }
-  if let Some(n) = v.first_count(&["stat.danmaku", "video_review", "cnt_info.danmaku"]) {
+  let danmaku = [
+    "stat.danmaku",
+    "video_review",
+    "danmaku",
+    "cnt_info.danmaku",
+  ];
+  if let Some(n) = v.first_count(&danmaku) {
     m.other.insert("danmaku".into(), n);
   }
   m
@@ -95,6 +103,12 @@ pub fn video(v: &Value) -> Post {
   }
   if let Some(t) = v.first_str(&["tname", "typename", "tag_name"]) {
     p.extra.insert("tname".into(), json!(t));
+  }
+  // Best and current place on the site-wide ranking, once it made it there.
+  for rank in ["his_rank", "now_rank"] {
+    if let Some(r) = v.u64(&format!("stat.{rank}")).filter(|r| *r > 0) {
+      p.extra.insert(rank.into(), json!(r));
+    }
   }
   let pages = v.list("pages").len();
   if pages > 1 {

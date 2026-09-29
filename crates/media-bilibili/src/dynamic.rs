@@ -1,24 +1,36 @@
-//! Dynamics: the following feed, a user's dynamics, one dynamic, and the
-//! dynamic writes (publish with images, repost, delete, like, favorite).
+//! Dynamics: the following feed, a user's dynamics, one dynamic, who liked
+//! and reposted it, and the dynamic writes (publish with images, repost,
+//! delete, like, favorite).
 
 use std::path::Path;
+use std::time::Duration;
 
 use media_core::file::Image;
 use media_core::http::Part;
-use media_core::{Action, Ctx, Draft, Error, Page, PageReq, Post, Result, Value, ValueExt, json};
+use media_core::text::from_secs;
+use media_core::{
+  Action, Ctx, Draft, Error, Page, PageReq, Post, Result, User, Value, ValueExt, json,
+};
 
-use crate::refs::DYNAMIC_URL;
-use crate::{account, api, parse};
+use crate::refs::{DYNAMIC_URL, Video};
+use crate::{account, api, parse, video};
 
 const FEED: &str = "https://api.bilibili.com/x/polymer/web-dynamic/v1/feed/all";
 const SPACE: &str = "https://api.bilibili.com/x/polymer/web-dynamic/v1/feed/space";
 const DETAIL: &str = "https://api.bilibili.com/x/polymer/web-dynamic/desktop/v1/detail";
+/// Likes and reposts mixed, newest first (the "赞与转发" tab of a dynamic's page).
+const REACTION: &str = "https://api.bilibili.com/x/polymer/web-dynamic/v1/detail/reaction";
+/// Reposts with their text (dyn-home bundle `index.*.js`, `bili-dyn-forward`).
+const FORWARDS: &str = "https://api.bilibili.com/x/polymer/web-dynamic/v1/detail/forward";
 const CREATE: &str = "https://api.bilibili.com/x/dynamic/feed/create/dyn";
 const UPLOAD: &str = "https://api.bilibili.com/x/dynamic/feed/draw/upload_bfs";
 const REPOST: &str = "https://api.vc.bilibili.com/dynamic_repost/v1/dynamic_repost/repost";
 const REMOVE: &str = "https://api.vc.bilibili.com/dynamic_svr/v1/dynamic_svr/rm_dynamic";
 const THUMB: &str = "https://api.vc.bilibili.com/dynamic_like/v1/dynamic_like/thumb";
 const COLLECT: &str = "https://api.bilibili.com/x/community/cosmo/interface/simple_action";
+/// Pages of a user's dynamics searched for a video's dynamic.
+const SCAN_PAGES: usize = 10;
+const VIDEO_DYNAMIC_TTL: Duration = Duration::from_secs(30 * 86_400);
 const FEATURES: &str = "itemOpusStyle,opusBigCover,onlyfansVote,endFooterHidden,decorationCard,onlyfansAssetsV2,ugcDelete";
 
 /// Items of a feed page: dynamics, or for `videos` the videos they announce.
@@ -31,11 +43,11 @@ fn items(data: &Value, videos: bool) -> Vec<Post> {
   }
 }
 
-fn cursor_page(data: &Value, posts: Vec<Post>) -> Page<Post> {
+fn cursor_page<T>(data: &Value, items: Vec<T>) -> Page<T> {
   let next = data
     .str("offset")
     .filter(|_| data.bool("has_more") == Some(true));
-  Page::new(posts, next)
+  Page::new(items, next)
 }
 
 /// Dynamics of followed accounts; `kind` is `all` or `video`.
@@ -89,6 +101,84 @@ pub async fn read(ctx: &Ctx, id: &str) -> Result<Post> {
   let mut post = parse::dynamic(&parse::from_desktop(&item));
   post.raw = Some(item);
   Ok(post)
+}
+
+/// The dynamic that announced video `v`. Bilibili links none from the video,
+/// so it is looked up among the uploader's dynamics down to the publication
+/// time (at most [`SCAN_PAGES`] pages) and remembered.
+pub async fn of_video(ctx: &Ctx, v: &Video) -> Result<String> {
+  let key = format!("bili-video-dynamic-{}", v.bvid);
+  if let Some(id) = ctx.store.cache_get::<String>(&key, VIDEO_DYNAMIC_TTL) {
+    return Ok(id);
+  }
+  let view = video::view(ctx, v).await?;
+  let mid = view.str("owner.mid").unwrap_or_default();
+  let published = view.i64("pubdate").and_then(from_secs);
+  let mut req = PageReq::default();
+  for _ in 0..SCAN_PAGES {
+    let page = of_user(ctx, &mid, &req).await?;
+    let found = page
+      .items
+      .iter()
+      .find(|p| p.extra.get("bvid").and_then(Value::as_str) == Some(v.bvid.as_str()));
+    if let Some(p) = found {
+      ctx.store.cache_put(&key, &p.id);
+      return Ok(p.id.clone());
+    }
+    // Newest first (a pinned dynamic aside): stop once past the video's time.
+    let past = page
+      .items
+      .iter()
+      .filter(|p| !p.extra.contains_key("pinned"))
+      .filter_map(|p| p.created_at)
+      .min()
+      .zip(published)
+      .is_some_and(|(oldest, at)| oldest < at);
+    match page.next_cursor {
+      Some(next) if !past => req.cursor = Some(next),
+      _ => break,
+    }
+  }
+  Err(
+    Error::not_found(format!("found no dynamic announcing {}", v.bvid)).with_hint(
+      "pass the dynamic (t.bilibili.com/ID) instead; `media bili dynamics USER` lists them",
+    ),
+  )
+}
+
+/// Accounts that liked dynamic `id` (the reaction list without its reposts).
+pub async fn likers(ctx: &Ctx, id: &str, page: &PageReq) -> Result<Page<User>> {
+  let data = api::get(ctx, REACTION)
+    .arg("id", id)
+    .arg("offset", page.cursor.as_deref().unwrap_or_default())
+    .arg("web_location", "333.1369")
+    .send()
+    .await?;
+  // `action` is `赞了` for a like, `转发了` for a repost.
+  let users = data
+    .list("items")
+    .iter()
+    .filter(|r| r.str("action").is_none_or(|a| a.contains('赞')))
+    .map(parse::user)
+    .filter(|u| !u.id.is_empty())
+    .collect();
+  Ok(cursor_page(&data, users))
+}
+
+/// Reposts of dynamic `id`, newest first.
+pub async fn reposts(ctx: &Ctx, id: &str, page: &PageReq) -> Result<Page<Post>> {
+  let data = api::get(ctx, FORWARDS)
+    .arg("id", id)
+    .arg("offset", page.cursor.as_deref().unwrap_or_default())
+    .send()
+    .await?;
+  let posts = data
+    .list("items")
+    .iter()
+    .map(|item| parse::forward(item, id))
+    .filter(|p| !p.id.is_empty())
+    .collect();
+  Ok(cursor_page(&data, posts))
 }
 
 // ── writes ───────────────────────────────────────────────────────────────

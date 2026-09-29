@@ -1,6 +1,7 @@
 //! Users: profiles, name lookup, followers / following and (un)follow.
 
-use media_core::{Action, Ctx, Error, Page, PageReq, Query, Result, User, ValueExt};
+use media_core::text::from_secs;
+use media_core::{Action, Ctx, Error, Page, PageReq, Query, Result, User, ValueExt, json};
 
 use crate::api;
 use crate::page::Pn;
@@ -47,6 +48,9 @@ pub async fn profile(ctx: &Ctx, input: &str) -> Result<User> {
   let mut user = parse::user(data.at("card"));
   user.stats.followers = data.count("follower").or(user.stats.followers);
   user.stats.posts = data.count("archive_count");
+  if let Some(n) = data.count("article_count") {
+    user.stats.other.insert("articles".into(), n);
+  }
   user.stats.likes = data.count("like_num");
   if ctx.http.has_cookie("SESSDATA") {
     user.followed = data.bool("following");
@@ -67,7 +71,18 @@ async fn relations(ctx: &Ctx, url: &str, input: &str, page: &PageReq) -> Result<
     .arg("order", "desc")
     .send()
     .await?;
-  let users = data.list("list").iter().map(parse::user).collect();
+  let users = data
+    .list("list")
+    .iter()
+    .map(|v| {
+      let mut u = parse::user(v);
+      // When the relation started (following / being followed).
+      if let Some(at) = v.i64("mtime").and_then(from_secs) {
+        u.extra.insert("followed_at".into(), json!(at));
+      }
+      u
+    })
+    .collect();
   Ok(pn.page(users, pn.before(data.u64("total"))))
 }
 

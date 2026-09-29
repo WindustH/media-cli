@@ -1,11 +1,10 @@
 //! Bilibili-only commands.
 
 use media_core::cli::PageArgs;
-use media_core::paging::collect;
 use media_core::{Ctx, Data, Result};
 
 use crate::refs::{self, Video};
-use crate::{account, dynamic, play, user, video};
+use crate::{account, creator, dynamic, play, user, video};
 
 #[derive(Debug, clap::Subcommand)]
 pub enum Extra {
@@ -45,6 +44,16 @@ pub enum Extra {
   },
   /// Your watch-later list
   WatchLater,
+  /// Your videos side by side with creator-center numbers (3-second bounce,
+  /// share watched, follows, click-through rank ...)
+  #[command(visible_alias = "my-videos")]
+  VideoStats {
+    /// Only these videos (at most 10); default: the latest ones
+    videos: Vec<String>,
+    /// How many of the latest videos
+    #[arg(short = 'n', long, default_value_t = 10, value_parser = clap::value_parser!(u16).range(1..=50))]
+    limit: u16,
+  },
   /// Dynamics of a user (yours when USER is omitted)
   #[command(visible_alias = "my-dynamics")]
   Dynamics {
@@ -77,29 +86,33 @@ pub async fn run(ctx: &Ctx, command: Extra) -> Result<Data> {
     E::Related { video, page } => {
       let v = video_ref(ctx, &video).await?;
       Data::Posts(
-        collect(page.limit, page.cursor, async |_| {
-          video::related(ctx, &v).await
-        })
-        .await?,
+        page
+          .collect_dated(async |_| video::related(ctx, &v).await)
+          .await?,
       )
     }
     E::Rank { page } => Data::Posts(
-      collect(page.limit, page.cursor, async |_| {
-        video::ranking(ctx, 0, "all").await
-      })
-      .await?,
+      page
+        .collect_dated(async |_| video::ranking(ctx, 0, "all").await)
+        .await?,
     ),
     E::WatchLater => Data::Posts(video::watch_later(ctx).await?),
+    E::VideoStats { videos, limit } => {
+      let mut refs = Vec::new();
+      for v in &videos {
+        refs.push(video_ref(ctx, v).await?);
+      }
+      Data::Posts(creator::compare(ctx, &refs, limit.into()).await?)
+    }
     E::Dynamics { user, page } => {
       let mid = match user {
         Some(u) => user::mid(ctx, &ctx.user_ref(&u)?).await?,
         None => account::my_mid(ctx).await?,
       };
       Data::Posts(
-        collect(page.limit, page.cursor, async |r| {
-          dynamic::of_user(ctx, &mid, &r).await
-        })
-        .await?,
+        page
+          .collect_dated(async |r| dynamic::of_user(ctx, &mid, &r).await)
+          .await?,
       )
     }
   })

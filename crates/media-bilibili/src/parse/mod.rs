@@ -5,9 +5,10 @@
 //! paths it can appear under instead of keeping one mapper per endpoint.
 
 mod dynamic;
+pub mod insights;
 mod video;
 
-pub use dynamic::{dynamic, dynamic_video, from_desktop};
+pub use dynamic::{dynamic, dynamic_video, forward, from_desktop};
 pub use video::video;
 
 use media_core::text::{from_secs, html_to_text};
@@ -117,6 +118,15 @@ pub fn comment(v: &Value) -> Comment {
   }
   if let Some(parent) = parent {
     c.extra.insert("parent".into(), json!(parent));
+  }
+  // The uploader's own reactions to the comment.
+  for (key, name) in [
+    ("up_action.like", "up_liked"),
+    ("up_action.reply", "up_replied"),
+  ] {
+    if v.bool(key) == Some(true) {
+      c.extra.insert(name.into(), json!(true));
+    }
   }
   c
 }

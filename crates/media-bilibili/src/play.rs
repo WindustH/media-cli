@@ -185,15 +185,19 @@ pub async fn subtitle(ctx: &Ctx, v: &Video, lang: Option<&str>) -> Result<Transc
 }
 
 /// Danmaku (bullet comments) of the video part, ordered by time. They come
-/// as protobuf in 6-minute segments (`DmSegMobileReply.elems`).
+/// as protobuf in 6-minute segments (`DmSegMobileReply.elems`): every segment
+/// up to the part's duration (whole seconds, so one more for the rest), or
+/// until an empty one when the duration is unknown.
 pub async fn danmaku(ctx: &Ctx, v: &Video) -> Result<Transcript> {
   let Part { cid, view, .. } = part(ctx, v).await?;
   let secs = view
     .u64(&format!("pages.{}.duration", v.page - 1))
     .or_else(|| view.u64("duration"))
     .unwrap_or(0);
+  let segments = if secs > 0 { secs / 360 + 1 } else { 200 };
   let mut cues = Vec::new();
-  for segment in 1..=secs.div_ceil(360).max(1) {
+  for segment in 1..=segments {
+    let before = cues.len();
     let resp = ctx
       .http
       .get(format!(
@@ -211,6 +215,9 @@ pub async fn danmaku(ctx: &Ctx, v: &Video) -> Result<Transcript> {
           _ => None,
         }),
     );
+    if secs == 0 && cues.len() == before {
+      break;
+    }
   }
   cues.sort_by(|a, b| a.from.total_cmp(&b.from));
   Ok(Transcript {

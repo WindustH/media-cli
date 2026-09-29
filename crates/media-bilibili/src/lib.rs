@@ -6,7 +6,9 @@
 
 mod account;
 mod api;
+mod archive;
 mod comment;
+mod creator;
 mod device;
 mod dynamic;
 mod extra;
@@ -25,8 +27,9 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use media_core::{
-  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Error, Media, Notification, Page,
-  PageReq, Platform, PlatformInfo, Post, QrStatus, QrTicket, Query, Result, User,
+  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Error, Insights, Media,
+  Notification, Page, PageReq, Platform, PlatformInfo, Post, QrStatus, QrTicket, Query, Result,
+  User,
 };
 
 use crate::refs::PostRef;
@@ -44,6 +47,15 @@ impl Bilibili {
 
   async fn section(&self, post: &str) -> Result<comment::Section> {
     comment::section(&self.ctx, &self.post(post).await?).await
+  }
+
+  /// Likers and reposts are those of a dynamic; a video's are those of the
+  /// dynamic that announced it.
+  async fn dynamic_id(&self, post: &str) -> Result<String> {
+    match self.post(post).await? {
+      PostRef::Dynamic(id) => Ok(id),
+      PostRef::Video(v) => dynamic::of_video(&self.ctx, &v).await,
+    }
   }
 }
 
@@ -65,6 +77,8 @@ impl Platform for Bilibili {
       Cap::Read,
       Cap::Comments,
       Cap::Replies,
+      Cap::Likers,
+      Cap::Reposts,
       Cap::User,
       Cap::UserPosts,
       Cap::Followers,
@@ -82,6 +96,8 @@ impl Platform for Bilibili {
       Cap::Publish,
       Cap::Delete,
       Cap::Download,
+      Cap::AccountInsights,
+      Cap::PostInsights,
     ],
     choices: Choices {
       search_sort: &["totalrank", "click", "pubdate", "dm", "stow", "scores"],
@@ -159,6 +175,16 @@ impl Platform for Bilibili {
     let section = self.section(post).await?;
     let (root, _) = refs::reply_target(comment)?;
     comment::thread(&self.ctx, &section, &root, page).await
+  }
+
+  async fn likers(&self, post: &str, page: &PageReq) -> Result<Page<User>> {
+    let id = self.dynamic_id(post).await?;
+    dynamic::likers(&self.ctx, &id, page).await
+  }
+
+  async fn reposts(&self, post: &str, page: &PageReq) -> Result<Page<Post>> {
+    let id = self.dynamic_id(post).await?;
+    dynamic::reposts(&self.ctx, &id, page).await
   }
 
   async fn user(&self, user: &str) -> Result<User> {
@@ -248,6 +274,13 @@ impl Platform for Bilibili {
     match self.post(post).await? {
       PostRef::Dynamic(id) => dynamic::delete(&self.ctx, &id).await,
       PostRef::Video(_) => Err(Error::unsupported("delete (videos)")),
+    }
+  }
+
+  async fn insights(&self, post: Option<&str>, days: u32) -> Result<Insights> {
+    match post {
+      None => creator::account(&self.ctx, days).await,
+      Some(p) => archive::insights(&self.ctx, &self.post(p).await?, days).await,
     }
   }
 
