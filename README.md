@@ -40,6 +40,10 @@ $ media bili download '#1' --audio-only
 - **Made for agents and scripts.** Every result comes in one envelope with
   stable fields and error codes; piped output switches to YAML by itself.
   Posts, users and comments share one shape across platforms.
+- **Ready for analysis.** Creator analytics (`insights`: trends, traffic
+  sources, audience), who liked and reposted a post, complete comment threads,
+  `--since` / `--until`, and CSV or JSON Lines output that drops straight into
+  pandas or DuckDB, each row stamped with when it was fetched.
 - **Short references.** After any list, `#3` means "the third item": no
   copying of long ids or links.
 - **Paging that never loses its place.** `-n 200` follows pages for you;

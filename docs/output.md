@@ -34,6 +34,7 @@ Success:
 ok: true
 schema_version: "1"
 platform: bili
+fetched_at: 2026-09-30T02:00:00Z
 data: ...
 ```
 
