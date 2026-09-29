@@ -170,6 +170,7 @@ impl PlatformInfo {
 
 /// Runtime handed to a platform: HTTP client (with the session cookies), files and session extras.
 pub struct Ctx {
+  pub info: PlatformInfo,
   pub http: Http,
   pub store: Store,
   extra: RefCell<BTreeMap<String, String>>,
@@ -177,12 +178,35 @@ pub struct Ctx {
 }
 
 impl Ctx {
-  pub fn new(http: Http, store: Store, extra: BTreeMap<String, String>) -> Self {
+  pub fn new(
+    info: PlatformInfo,
+    http: Http,
+    store: Store,
+    extra: BTreeMap<String, String>,
+  ) -> Self {
     Self {
+      info,
       http,
       store,
       extra: RefCell::new(extra),
       extra_changed: Cell::new(false),
+    }
+  }
+
+  /// How to log in, for error hints.
+  pub fn login_hint(&self) -> String {
+    let id = self.info.id;
+    let browser = if cfg!(feature = "browser") {
+      format!(", `media {id} login --browser`")
+    } else {
+      String::new()
+    };
+    if self.info.supports(Cap::QrLogin) {
+      format!("run `media {id} login` (QR code){browser} or `media {id} login --cookie '...'`")
+    } else {
+      format!(
+        "run `media {id} login --cookie '...'` with the cookie header of a logged-in browser{browser}"
+      )
     }
   }
 
@@ -222,11 +246,13 @@ impl Ctx {
     self.store.resolve(RefKind::User, arg)
   }
 
-  /// Fail with `not_authenticated` unless the required cookies are present.
+  /// Fail with `not_authenticated` (and a login hint) unless these cookies are present.
   pub fn require_login(&self, required: &[&str]) -> Result<()> {
     match required.iter().find(|c| !self.http.has_cookie(c)) {
       None => Ok(()),
-      Some(c) => Err(Error::auth(format!("not logged in (missing cookie `{c}`)"))),
+      Some(c) => Err(
+        Error::auth(format!("not logged in (missing cookie `{c}`)")).with_hint(self.login_hint()),
+      ),
     }
   }
 }

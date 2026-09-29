@@ -75,6 +75,8 @@ pub async fn login<P: Platform>(p: &P, args: LoginArgs) -> Result<Data> {
   } else if use_qr {
     qr_login(p).await?;
     "qrcode".to_owned()
+  } else if args.browser.is_none() && !cfg!(feature = "browser") {
+    return Err(Error::input("choose how to log in").with_hint(ctx.login_hint()));
   } else {
     let wanted = args.browser.filter(|b| b != "auto");
     let found = browser::import(wanted.as_deref(), info.cookie_domains)?;
@@ -192,8 +194,8 @@ pub async fn status<P: Platform>(p: &P, loaded: &Loaded) -> Result<(Data, ExitCo
   };
   if let Some(c) = missing_cookie(&info, p.ctx()) {
     return not_logged_in(format!(
-      "no session (cookie `{c}` missing); run `media {} login`",
-      info.id
+      "no session (cookie `{c}` missing); {}",
+      p.ctx().login_hint()
     ));
   }
   match p.whoami().await {
@@ -208,7 +210,7 @@ pub async fn status<P: Platform>(p: &P, loaded: &Loaded) -> Result<(Data, ExitCo
       ExitCode::SUCCESS,
     )),
     Err(e) if e.code == ErrorCode::NotAuthenticated => {
-      not_logged_in(format!("{}; run `media {} login`", e.message, info.id))
+      not_logged_in(format!("{}; {}", e.message, p.ctx().login_hint()))
     }
     Err(e) => Err(e),
   }

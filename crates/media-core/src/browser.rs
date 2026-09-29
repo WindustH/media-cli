@@ -69,9 +69,13 @@ pub fn import(browser: Option<&str>, domains: &[&str]) -> Result<Vec<(String, Co
 
 #[cfg(not(feature = "browser"))]
 pub fn import(_browser: Option<&str>, _domains: &[&str]) -> Result<Vec<(String, Cookies)>> {
-  Err(Error::unsupported(
-    "login --browser (built without the `browser` feature)",
-  ))
+  Err(
+    Error::new(
+      crate::error::ErrorCode::UnsupportedOperation,
+      "this build cannot read browser cookies (it was built without the `browser` feature)",
+    )
+    .with_hint("log in with `--cookie '...'` instead"),
+  )
 }
 
 /// Parse `a=1; b=2` (as copied from the browser's request headers).

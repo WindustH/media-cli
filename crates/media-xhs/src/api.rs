@@ -49,10 +49,7 @@ impl Client {
 
   /// Pre-check for endpoints that need an account (visitors only get captchas).
   pub fn require_login(&self) -> Result<()> {
-    self
-      .ctx
-      .require_login(&["a1", "web_session"])
-      .map_err(|e| e.with_hint("run `media xhs login`"))
+    self.ctx.require_login(&["a1", "web_session"])
   }
 
   // ── main API (x-s signing) ───────────────────────────────────────────

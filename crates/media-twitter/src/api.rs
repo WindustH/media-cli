@@ -18,8 +18,7 @@ pub const REST: &str = "https://x.com/i/api/1.1";
 const GUEST_ACTIVATE: &str = "https://api.x.com/1.1/guest/activate.json";
 const GUEST_KEY: &str = "guest-token";
 const GUEST_TTL: Duration = Duration::from_secs(2 * 3600);
-const LOGIN_HINT: &str =
-  "log in with `media twitter login --browser` or `--cookie 'auth_token=...; ct0=...'`";
+const LOGIN_HINT: &str = "log in with `media twitter login --cookie 'auth_token=...; ct0=...'`";
 
 pub struct Api {
   pub ctx: Ctx,
@@ -47,10 +46,7 @@ impl Api {
   }
 
   pub fn require_login(&self) -> Result<()> {
-    self
-      .ctx
-      .require_login(&["auth_token", "ct0"])
-      .map_err(|e| e.with_hint(LOGIN_HINT))
+    self.ctx.require_login(&["auth_token", "ct0"])
   }
 
   /// The logged-in user id, from the `twid` cookie (`u=123`) when present.

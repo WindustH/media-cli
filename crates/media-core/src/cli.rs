@@ -426,7 +426,7 @@ async fn execute<P: Platform>(
     min_interval: info.min_interval,
   };
   let http = Http::new(&config, loaded.session.cookies.clone())?;
-  let platform = P::new(Ctx::new(http, store, loaded.session.extra.clone()))?;
+  let platform = P::new(Ctx::new(info, http, store, loaded.session.extra.clone()))?;
 
   let name = matches.subcommand_name().unwrap_or_default();
   let (data, code, persist) = if CommonCommand::has_subcommand(name) {
