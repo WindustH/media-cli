@@ -26,11 +26,11 @@ pub struct GlobalArgs {
   /// Output format (default: table on a terminal, yaml when piped)
   #[arg(short = 'f', long, global = true, value_enum, env = "MEDIA_OUTPUT")]
   pub format: Option<Format>,
-  /// Shortcut for `--format json`
-  #[arg(long, global = true, conflicts_with_all = ["format", "yaml"])]
+  /// Shortcut for `--format json` (wins over --format and MEDIA_OUTPUT)
+  #[arg(long, global = true)]
   pub json: bool,
-  /// Shortcut for `--format yaml`
-  #[arg(long, global = true, conflicts_with = "format")]
+  /// Shortcut for `--format yaml` (wins over --format and MEDIA_OUTPUT)
+  #[arg(long, global = true)]
   pub yaml: bool,
   /// Include the untouched upstream payloads (`raw` fields)
   #[arg(long, global = true)]
