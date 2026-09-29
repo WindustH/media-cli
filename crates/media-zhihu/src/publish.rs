@@ -40,20 +40,20 @@ async fn upload(ctx: &Ctx, path: &Path, source: &str) -> Result<Image> {
     .map(|s| (s.width, s.height))
     .unwrap_or((0, 0));
   let hash = format!("{:x}", Md5::digest(&data));
-  let v = api::call(
-    ctx,
-    api::post(ctx, &format!("{MOBILE}/images"))
-      .json(&json!({ "image_hash": hash, "source": source })),
-  )
-  .await?;
+  let mut v = register(ctx, &hash, source).await?;
+  match v.i64("upload_file.state") {
+    Some(1) => {} // already known to Zhihu
+    Some(2) => {
+      put_object(ctx, &v, data, file.mime).await?;
+      // The id handed out before the upload stays `init` forever; registering
+      // again yields a new id (state 1) whose processing does complete.
+      v = register(ctx, &hash, source).await?;
+    }
+    other => return Err(Error::upstream(format!("unexpected image state {other:?}"))),
+  }
   let image_id = v
     .str("upload_file.image_id")
     .ok_or_else(|| Error::upstream("image registration returned no image_id"))?;
-  match v.i64("upload_file.state") {
-    Some(1) => {} // already known to Zhihu
-    Some(2) => put_object(ctx, &v, data, file.mime).await?,
-    other => return Err(Error::upstream(format!("unexpected image state {other:?}"))),
-  }
   let info = poll_image(ctx, &image_id).await?;
   let src = info.str("src").unwrap_or_default();
   Ok(Image {
@@ -64,6 +64,16 @@ async fn upload(ctx: &Ctx, path: &Path, source: &str) -> Result<Image> {
     width,
     height,
   })
+}
+
+/// Register an image by content hash: its id, and an upload token when Zhihu lacks it.
+async fn register(ctx: &Ctx, hash: &str, source: &str) -> Result<Value> {
+  api::call(
+    ctx,
+    api::post(ctx, &format!("{MOBILE}/images"))
+      .json(&json!({ "image_hash": hash, "source": source })),
+  )
+  .await
 }
 
 /// Upload the bytes to Aliyun OSS with the STS token from the registration.
@@ -101,14 +111,24 @@ async fn put_object(ctx: &Ctx, reg: &Value, data: Vec<u8>, content_type: &str) -
 }
 
 async fn poll_image(ctx: &Ctx, image_id: &str) -> Result<Value> {
-  for _ in 0..15 {
+  // Processing can take a minute or more; poll with a growing interval (~2 min in all).
+  let mut status = String::new();
+  for attempt in 0..30u64 {
     let v = api::call(ctx, api::get(ctx, &format!("{MOBILE}/images/{image_id}"))).await?;
-    if v.str("status").as_deref() == Some("success") {
-      return Ok(v);
+    status = v.str("status").unwrap_or_default();
+    match status.as_str() {
+      "success" => return Ok(v),
+      "fail" | "failed" | "error" => {
+        return Err(Error::upstream(format!(
+          "Zhihu could not process the image ({status})"
+        )));
+      }
+      _ => tokio::time::sleep(Duration::from_secs((2 + attempt / 4).min(6))).await,
     }
-    tokio::time::sleep(Duration::from_secs(2)).await;
   }
-  Err(Error::upstream("image processing timed out"))
+  Err(Error::upstream(format!(
+    "image processing timed out (last status `{status}`)"
+  )))
 }
 
 async fn upload_all(ctx: &Ctx, paths: &[PathBuf], source: &str) -> Result<Vec<Image>> {
