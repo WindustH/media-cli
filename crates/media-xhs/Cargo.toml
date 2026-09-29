@@ -6,7 +6,18 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+aes.workspace = true
+base64.workspace = true
+cbc.workspace = true
 clap.workspace = true
+flate2 = "1"
+http = "1"
+md-5.workspace = true
 media-core.workspace = true
+rand.workspace = true
+regex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+url.workspace = true
