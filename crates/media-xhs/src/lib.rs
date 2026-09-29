@@ -3,13 +3,14 @@
 //! - [`api`]: signed transport and error mapping; [`sign`]: x-s / x-s-common / XYW.
 //! - [`refs`]: note and user references; [`parse`]: JSON → models; [`page`]: note pages.
 //! - Endpoints by domain: [`discover`], [`notes`], [`people`], [`inbox`], [`write`],
-//!   [`creator`], [`login`]; platform-only commands in [`extra`].
+//!   [`creator`], [`insights`] (with [`stats`]), [`login`]; platform-only commands in [`extra`].
 
 mod api;
 mod creator;
 mod discover;
 mod extra;
 mod inbox;
+mod insights;
 mod login;
 mod notes;
 mod page;
@@ -17,6 +18,7 @@ mod parse;
 mod people;
 mod refs;
 mod sign;
+mod stats;
 mod write;
 
 use std::cell::Cell;
@@ -24,8 +26,8 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use media_core::{
-  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Notification, Page, PageReq,
-  Platform, PlatformInfo, Post, QrStatus, QrTicket, Query, Result, User,
+  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Insights, Notification, Page,
+  PageReq, Platform, PlatformInfo, Post, QrStatus, QrTicket, Query, Result, User,
 };
 
 use api::Client;
@@ -68,6 +70,8 @@ impl Platform for Xhs {
       Cap::Publish,
       Cap::Delete,
       Cap::Download,
+      Cap::AccountInsights,
+      Cap::PostInsights,
     ],
     choices: Choices {
       search_sort: &["general", "popular", "latest"],
@@ -206,6 +210,13 @@ impl Platform for Xhs {
 
   async fn delete(&self, post: &str) -> Result<Action> {
     creator::delete(&self.client, post).await
+  }
+
+  async fn insights(&self, post: Option<&str>, days: u32) -> Result<Insights> {
+    match post {
+      None => insights::account(&self.client, days).await,
+      Some(post) => insights::note(&self.client, post, days).await,
+    }
   }
 
   async fn run_extra(&self, command: Self::Extra) -> Result<Data> {

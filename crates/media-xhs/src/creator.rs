@@ -1,5 +1,6 @@
 //! Creator-platform endpoints (`CreatorEndpointsMixin`): user / topic search,
-//! image upload and publishing, deleting and listing your own notes.
+//! image upload and publishing, deleting and listing your own notes, and the
+//! data center's note and active-fan lists.
 
 use std::path::Path;
 use std::time::Duration;
@@ -10,8 +11,8 @@ use media_core::{
 };
 
 use crate::api::Client;
-use crate::parse;
 use crate::refs::{self, note_url};
+use crate::{parse, stats};
 
 /// Creator-center requests go to edith but come from the creator site.
 const CREATOR_PAGE: [(&str, &str); 2] = [
@@ -187,8 +188,9 @@ pub async fn delete(c: &Client, arg: &str) -> Result<Action> {
 }
 
 /// One page (0-based) of the creator center note list.
-pub async fn my_notes(c: &Client, page: u32) -> Result<Page<Post>> {
+pub async fn my_notes(c: &Client, req: &PageReq) -> Result<Page<Post>> {
   c.require_login()?;
+  let page = req.number_or(0);
   let page_s = page.to_string();
   let data = c
     .creator_get(
@@ -201,11 +203,53 @@ pub async fn my_notes(c: &Client, page: u32) -> Result<Page<Post>> {
     rows => rows,
   };
   let items: Vec<Post> = rows.iter().filter_map(parse::creator_note).collect();
-  // The list reports the next page, or -1 at the end.
+  // The list reports the next page to ask for (the note manager's `page`), or -1 at the end.
   let next = match data.i64("page") {
     Some(n) if n < 0 => None,
     _ if items.is_empty() => None,
+    Some(n) if n as u64 > page => Some(n.to_string()),
     _ => Some((page + 1).to_string()),
   };
   Ok(Page::new(items, next))
+}
+
+// ── data center listings ────────────────────────────────────────────────
+
+/// 内容分析 note list (`NOTE_ANALYZE_LIST`, called by chunk 4323).
+const NOTE_STATS: &str = "/api/galaxy/creator/datacenter/note/analyze/list";
+/// 我的活跃粉丝 (`ACTIVE_FANS_NEW`, called by chunk 7763).
+const ACTIVE_FANS: &str = "/api/galaxy/creator/data/active_fans_new";
+
+/// Your notes with their numbers, newest first, 10 per page like the page.
+pub async fn note_stats(c: &Client, req: &PageReq) -> Result<Page<Post>> {
+  c.require_login()?;
+  let (page, size) = (req.number_or(1), 10);
+  let page_s = page.to_string();
+  let params = [
+    ("type", "0"),
+    ("page_size", "10"),
+    ("page_num", page_s.as_str()),
+  ];
+  let data = parse::snake_keys(c.creator_get(NOTE_STATS, &params).await?);
+  let items: Vec<Post> = data
+    .list("note_infos")
+    .iter()
+    .filter_map(stats::note_row)
+    .collect();
+  let more = !items.is_empty()
+    && match data.u64("total") {
+      Some(total) => page * size < total,
+      None => items.len() as u64 >= size,
+    };
+  Ok(Page::new(items, more.then(|| (page + 1).to_string())))
+}
+
+/// Fans who interacted most over the last 7 or 30 days.
+pub async fn active_fans(c: &Client, days: u32) -> Result<Page<User>> {
+  c.require_login()?;
+  let data = parse::snake_keys(c.creator_get(ACTIVE_FANS, &[]).await?);
+  let rows = data.list(crate::insights::window(days).0);
+  Ok(Page::last(
+    rows.iter().filter_map(stats::active_fan).collect(),
+  ))
 }
