@@ -10,9 +10,10 @@
 //!   anonymously, with a visitor id: without one YouTube answers
 //!   "Sign in to confirm you're not a bot".
 //!
-//! The visitor id (`responseContext.visitorData`) is kept in the cache and
-//! sent with every request. Failures map to `media_core::Error`: the
-//! `{error: {code, status, message}}` envelope, `ERROR` alerts and the bot check.
+//! The visitor id of anonymous calls (`responseContext.visitorData`) is kept
+//! in the cache and sent with them; a cookie session keeps its own.
+//! Failures map to `media_core::Error`: the `{error: {code, status, message}}`
+//! envelope, `ERROR` alerts and the bot check.
 
 use std::cell::RefCell;
 use std::time::Duration;
@@ -141,7 +142,9 @@ impl Api {
     mut body: Value,
     retries: u32,
   ) -> Result<Value> {
-    let visitor = self.visitor.borrow().clone();
+    // A cookie session has its own visitor; the cached one is for anonymous calls.
+    let signed = client == Client::Web && self.logged_in();
+    let visitor = self.visitor.borrow().clone().filter(|_| !signed);
     body["context"] = client.context(visitor.as_deref());
     let (id, version) = client.id();
     let http = &self.ctx.http;
@@ -168,7 +171,9 @@ impl Api {
       Client::AndroidVr => req = req.no_cookies().header("user-agent", VR_UA),
     }
     let v = self.check(req.send().await?)?;
-    self.remember_visitor(&v);
+    if !signed {
+      self.remember_visitor(&v);
+    }
     Ok(v)
   }
 

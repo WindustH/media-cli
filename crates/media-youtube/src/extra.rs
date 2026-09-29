@@ -1,6 +1,6 @@
 //! YouTube-only commands: transcripts, playlists, a channel's Shorts, live
-//! streams and community posts, related videos, dislikes and the one-time
-//! OAuth grant for analytics.
+//! streams and community posts, related videos, hashtags, dislikes and the
+//! one-time OAuth grant for analytics.
 
 use media_core::cli::PageArgs;
 use media_core::{Action, Data, Result, json};
@@ -48,6 +48,13 @@ pub enum Command {
   /// Videos YouTube suggests next to a video
   Related {
     video: String,
+    #[command(flatten)]
+    page: PageArgs,
+  },
+  /// Videos of a hashtag
+  Hashtag {
+    /// With or without `#`
+    tag: String,
     #[command(flatten)]
     page: PageArgs,
   },
@@ -100,6 +107,11 @@ pub async fn run(api: &Api, command: Command) -> Result<Data> {
           .await?,
       )
     }
+    C::Hashtag { tag, page } => Data::Posts(
+      page
+        .collect_dated(async |r| video::hashtag(api, &tag, &r).await)
+        .await?,
+    ),
     C::Oauth => Data::Value(insights::authorize(ctx).await?),
     C::Dislike { video, undo } => {
       let id = refs::video(&ctx.post_ref(&video)?)?;

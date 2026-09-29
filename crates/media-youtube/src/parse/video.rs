@@ -117,7 +117,7 @@ pub fn short(s: &Value) -> Option<Post> {
     .str("onTap.innertubeCommand.reelWatchEndpoint.videoId")
     .or_else(|| {
       s.str("entityId")
-        .and_then(|e| e.rsplit('-').next().map(str::to_owned))
+        .and_then(|e| e.strip_prefix("shorts-shelf-item-").map(str::to_owned))
         .filter(|id| id.len() == 11)
     })?;
   let mut p = base(id, true);

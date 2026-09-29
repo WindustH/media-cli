@@ -9,6 +9,7 @@ use media_core::{Error, Page, PageReq, Post, Result, Value, ValueExt, json};
 
 use crate::api::{self, Api};
 use crate::parse;
+use crate::proto::Msg;
 use crate::refs::{self, PostRef};
 use crate::{browse, comment};
 
@@ -112,6 +113,20 @@ pub async fn hot(api: &Api, category: Option<&str>, req: &PageReq) -> Result<Pag
     .map(|(_, id)| *id)
     .ok_or_else(|| Error::input(format!("unknown category `{name}`")))?;
   let l = browse::listing(api, id, None, req).await?;
+  Ok(Page::new(l.posts, l.next))
+}
+
+/// Videos of a hashtag page (`FEhashtag`; params as YouTube.js `Hashtag`:
+/// `{93: {1: tag, 3: 1}}`, the same bytes as the site's hashtag links).
+pub async fn hashtag(api: &Api, tag: &str, req: &PageReq) -> Result<Page<Post>> {
+  let tag = tag.trim().trim_start_matches('#').to_lowercase();
+  if tag.is_empty() {
+    return Err(Error::input("empty hashtag"));
+  }
+  let params = Msg::new()
+    .msg(93, Msg::new().str(1, &tag).int(3, 1))
+    .encode();
+  let l = browse::listing(api, "FEhashtag", Some(&params), req).await?;
   Ok(Page::new(l.posts, l.next))
 }
 

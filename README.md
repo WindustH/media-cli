@@ -63,7 +63,7 @@ $ media bili download '#1' --audio-only
   danmaku; Twitter retweets, quotes and lists; Zhihu questions, articles and
   answers; Xiaohongshu creator notes; Reddit subreddits, downvotes, crossposts
   and galleries; YouTube transcripts, Shorts, live streams, community posts,
-  playlists and related videos.
+  hashtags, playlists and related videos.
 
 ## What each platform supports
 
