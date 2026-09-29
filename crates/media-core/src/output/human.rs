@@ -449,12 +449,12 @@ fn downloads(files: &[Downloaded]) {
   }
 }
 
-/// Integers as counts, `*_rate` / `*ratio` as percentages, other decimals rounded.
+/// Integers as counts, `*_rate` / `*ratio` / `ctr` as percentages, other decimals rounded.
 fn metric(name: &str, v: &serde_json::Value) -> String {
   let Some(n) = v.as_f64() else {
     return crate::output::rows::cell(v);
   };
-  if name.ends_with("rate") || name.ends_with("ratio") {
+  if name.ends_with("rate") || name.ends_with("ratio") || name == "ctr" || name.ends_with("_ctr") {
     return format!("{:.1}%", n * 100.0);
   }
   match v.as_u64() {
