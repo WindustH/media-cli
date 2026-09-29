@@ -6,7 +6,7 @@ use clap::Subcommand;
 use jiff::Timestamp;
 
 use crate::error::{Error, Result};
-use crate::model::{Dated, Page};
+use crate::model::{Dated, Keyed, Page};
 use crate::output::Format;
 use crate::paging::{Window, collect, collect_window};
 use crate::platform::PageReq;
@@ -78,15 +78,16 @@ impl PageArgs {
   }
 
   /// Follow a listing of dated items (posts, comments, notifications) within `--since` / `--until`.
-  pub async fn collect_dated<T: Dated>(
+  pub async fn collect_dated<T: Dated + Keyed>(
     &self,
     fetch: impl AsyncFnMut(PageReq) -> Result<Page<T>>,
   ) -> Result<Page<T>> {
-    collect_window(self.limit, self.cursor.clone(), self.window(), fetch).await
+    let page = collect_window(self.limit, self.cursor.clone(), self.window(), fetch).await?;
+    Ok(dedup(page))
   }
 
   /// Follow a listing without publication times (users, collections).
-  pub async fn collect<T>(
+  pub async fn collect<T: Keyed>(
     &self,
     fetch: impl AsyncFnMut(PageReq) -> Result<Page<T>>,
   ) -> Result<Page<T>> {
@@ -95,7 +96,9 @@ impl PageArgs {
         "--since / --until only apply to posts, comments and notifications",
       ));
     }
-    collect(self.limit, self.cursor.clone(), fetch).await
+    Ok(dedup(
+      collect(self.limit, self.cursor.clone(), fetch).await?,
+    ))
   }
 }
 
@@ -357,4 +360,13 @@ pub enum CommonCommand {
   },
   /// Download the images / video / audio of a post
   Download(DownloadArgs),
+}
+
+/// Drop items an upstream repeated across pages (same id), keeping the first.
+fn dedup<T: Keyed>(mut page: Page<T>) -> Page<T> {
+  let mut seen = std::collections::HashSet::new();
+  page
+    .items
+    .retain(|i| i.key().is_empty() || seen.insert(i.key().to_owned()));
+  page
 }

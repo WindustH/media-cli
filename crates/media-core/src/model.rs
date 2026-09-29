@@ -352,6 +352,23 @@ pub struct AuthStatus {
   pub message: Option<String>,
 }
 
+/// Items with a stable id, so pages an upstream repeats can be de-duplicated.
+pub trait Keyed {
+  fn key(&self) -> &str;
+}
+
+macro_rules! keyed {
+  ($($t:ty),*) => {$(
+    impl Keyed for $t {
+      fn key(&self) -> &str {
+        &self.id
+      }
+    }
+  )*};
+}
+
+keyed!(Post, User, Comment, Collection, Notification);
+
 /// Items with a publication time, which `--since` / `--until` filter on.
 pub trait Dated {
   fn date(&self) -> Option<Timestamp>;

@@ -109,7 +109,7 @@ pub(super) async fn common<P: Platform>(
         .collect_dated(async |r| p.comments(&post, sort, &r).await)
         .await?;
       if replies {
-        complete_replies(p, &post, &mut comments.items).await?;
+        complete_replies(p, &post, &mut comments.items, 0).await?;
       }
       ok(Data::Comments(comments))
     }
@@ -275,20 +275,28 @@ pub(super) async fn common<P: Platform>(
   }
 }
 
+/// How deep `comments --replies` follows nested threads.
+const REPLY_DEPTH: usize = 3;
+
 /// Fetch the full reply thread of every comment whose inline replies are
-/// incomplete (platforms usually inline only a few).
-async fn complete_replies<P: Platform>(p: &P, post: &str, comments: &mut [Comment]) -> Result<()> {
-  if !P::INFO.supports(Cap::Replies) {
+/// incomplete (platforms usually inline only a few), down to [`REPLY_DEPTH`].
+async fn complete_replies<P: Platform>(
+  p: &P,
+  post: &str,
+  comments: &mut [Comment],
+  depth: usize,
+) -> Result<()> {
+  if !P::INFO.supports(Cap::Replies) || depth >= REPLY_DEPTH {
     return Ok(());
   }
   for c in comments.iter_mut() {
     let expected = c.reply_count.unwrap_or(0) as usize;
-    if expected == 0 || c.replies.len() >= expected {
-      continue;
+    if expected > 0 && c.replies.len() < expected {
+      let id = c.id.clone();
+      let all = collect(usize::MAX, None, async |r| p.replies(post, &id, &r).await).await?;
+      c.replies = all.items;
     }
-    let id = c.id.clone();
-    let all = collect(usize::MAX, None, async |r| p.replies(post, &id, &r).await).await?;
-    c.replies = all.items;
+    Box::pin(complete_replies(p, post, &mut c.replies, depth + 1)).await?;
   }
   Ok(())
 }
