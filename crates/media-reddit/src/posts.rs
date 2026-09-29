@@ -73,8 +73,22 @@ pub async fn own(api: &Api, user: Option<&str>, which: &str, req: &PageReq) -> R
   listing::posts(api, &format!("/user/{name}/{which}"), query, req).await
 }
 
+/// Crossposts of a post, newest first (`/duplicates/<id>`, which lists them
+/// after the post itself; other submissions of the same link are left out).
+/// Reddit repeats some of them, so each appears once per page.
+pub async fn crossposts(api: &Api, arg: &str, req: &PageReq) -> Result<Page<Post>> {
+  let id = refs::post(&api.ctx, arg).await?;
+  let query = vec![("crossposts_only", "true".into()), ("sort", "new".into())];
+  let path = format!("/duplicates/{id}");
+  let v = api.get(&path, &listing::paged(query, req)).await?;
+  let mut page = listing::of(v.at("1"), listing::post);
+  let mut seen = std::collections::HashSet::new();
+  page.items.retain(|p| seen.insert(p.id.clone()));
+  Ok(page)
+}
+
 /// A post without its comments.
-async fn fetch(api: &Api, arg: &str) -> Result<Post> {
+pub async fn fetch(api: &Api, arg: &str) -> Result<Post> {
   let id = refs::post(&api.ctx, arg).await?;
   let missing = || Error::not_found(format!("post {id} not found"));
   let query = [("limit", "1".into()), ("depth", "1".into())];
