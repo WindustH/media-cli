@@ -2,13 +2,12 @@
 //!
 //! - **Web** (default): `https://www.reddit.com/<path>.json?raw_json=1`, with
 //!   the browser session cookies (`reddit_session`) when logged in and
-//!   anonymously otherwise. Writes go to the classic API on the same host and
-//!   carry the account's `modhash` (from `/api/me.json`) as `X-Modhash` header
-//!   and `uh` field, the CSRF token Reddit's API documentation prescribes for
-//!   cookie sessions. This is preferred over the web app's `token_v2` bearer
-//!   cookie against `oauth.reddit.com`: `token_v2` is a JWT that expires
-//!   within a day and is only renewed by page loads of the web app, while
-//!   `reddit_session` plus modhash live as long as the browser login.
+//!   anonymously otherwise. Writes use the web app's own bearer token, the
+//!   `token_v2` cookie (a JWT living about a day, renewed by loading the home
+//!   page), against `oauth.reddit.com`: the classic cookie API answers
+//!   submissions with `BAD_CAPTCHA`. Without a usable `token_v2`, writes fall
+//!   back to the classic API on www with the account's `modhash` (from
+//!   `/api/me.json`) as `X-Modhash` header and `uh` field.
 //! - **OAuth**: with `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`,
 //!   `REDDIT_USERNAME` and `REDDIT_PASSWORD` set, a password-grant token
 //!   ([`crate::oauth`]) goes as `Authorization: bearer` to
@@ -102,14 +101,34 @@ impl Api {
 
   async fn write(&self, path: &str, body: Body<'_>) -> Result<Value> {
     self.require_login()?;
-    let modhash = match self.oauth {
-      Some(_) => None,
-      None => Some(self.modhash().await?),
+    match self.send_write(path, &body, self.web_token().await).await {
+      // The classic cookie API wants a captcha for some writes (submissions);
+      // its responses often hand out the `token_v2` bearer, so retry with it.
+      // Nothing was created by the refused attempt.
+      Err(e) if e.message.contains("BAD_CAPTCHA") => match self.web_token().await {
+        Some(token) => self.send_write(path, &body, Some(token)).await,
+        None => Err(e),
+      },
+      other => other,
+    }
+  }
+
+  /// One write: with the web bearer when given, else with the active mode.
+  async fn send_write(&self, path: &str, body: &Body<'_>, token: Option<String>) -> Result<Value> {
+    let (mut req, modhash) = match token {
+      Some(token) => (self.bearer(Method::POST, path, &token), None),
+      None => {
+        let modhash = match self.oauth {
+          Some(_) => None,
+          None => Some(self.modhash().await?),
+        };
+        (self.request(Method::POST, path).await?, modhash)
+      }
     };
-    let mut req = self.request(Method::POST, path).await?;
     req = match body {
-      Body::Json(v) => req.json(&v),
-      Body::Form(mut form) => {
+      Body::Json(v) => req.json(v),
+      Body::Form(form) => {
+        let mut form = form.clone();
         form.push(("api_type", "json".into()));
         if let Some(m) = &modhash {
           form.push(("uh", m.clone()));
@@ -135,13 +154,8 @@ impl Api {
     let http = &self.ctx.http;
     if let Some(o) = &self.oauth {
       return Ok(
-        http
-          .request(method, format!("{OAUTH}{path}"))
-          .no_cookies()
-          .header(
-            "authorization",
-            format!("bearer {}", o.token(&self.ctx).await?),
-          )
+        self
+          .bearer(method, path, &o.token(&self.ctx).await?)
           .header("user-agent", o.user_agent()),
       );
     }
@@ -153,6 +167,56 @@ impl Api {
         .header("origin", WWW)
         .header("referer", format!("{WWW}/"))
     })
+  }
+
+  /// A request to `oauth.reddit.com` carrying `token`.
+  fn bearer(&self, method: Method, path: &str, token: &str) -> Req<'_> {
+    self
+      .ctx
+      .http
+      .request(method, format!("{OAUTH}{path}"))
+      .no_cookies()
+      .header("authorization", format!("bearer {token}"))
+  }
+
+  /// The web app's bearer token (`token_v2`) of a cookie session while it is
+  /// valid; an expired one is renewed by loading the home page once.
+  async fn web_token(&self) -> Option<String> {
+    if self.oauth.is_some() || !self.ctx.http.has_cookie(SESSION_COOKIE) {
+      return None;
+    }
+    let valid = || self.ctx.http.cookie("token_v2").filter(|t| !jwt_expired(t));
+    if let Some(token) = valid() {
+      return Some(token);
+    }
+    tracing::debug!(
+      "token_v2 {}; loading the home page to renew it",
+      if self.ctx.http.has_cookie("token_v2") {
+        "expired"
+      } else {
+        "missing"
+      }
+    );
+    let renew = self
+      .ctx
+      .http
+      .get(format!("{WWW}/"))
+      .header("accept", "text/html,application/xhtml+xml")
+      .send()
+      .await;
+    if let Err(e) = renew {
+      tracing::debug!("token_v2 renewal failed: {e}");
+    }
+    let token = valid();
+    tracing::debug!(
+      "token_v2 after renewal: {}",
+      if token.is_some() {
+        "valid"
+      } else {
+        "unavailable"
+      }
+    );
+    token
   }
 
   /// The logged-in account: `/api/me` (cookie session) or `/api/v1/me` (OAuth).
@@ -311,4 +375,17 @@ fn api_errors(v: &Value) -> Result<()> {
     | "NOT_ALLOWED" => Error::new(ErrorCode::PermissionDenied, text),
     _ => Error::input(text),
   })
+}
+
+/// Whether a JWT's `exp` is less than a minute away (or unreadable).
+fn jwt_expired(token: &str) -> bool {
+  use base64::Engine;
+  use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+  let exp = token
+    .split('.')
+    .nth(1)
+    .and_then(|p| URL_SAFE_NO_PAD.decode(p.trim_end_matches('=')).ok())
+    .and_then(|b| serde_json::from_slice::<Value>(&b).ok())
+    .and_then(|v| v.i64("exp"));
+  exp.is_none_or(|exp| exp - 60 <= jiff::Timestamp::now().as_second())
 }

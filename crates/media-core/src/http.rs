@@ -229,6 +229,8 @@ impl Http {
   fn absorb_cookies(&self, resp: &wreq::Response) {
     let mut jar = self.jar.borrow_mut();
     for c in resp.cookies() {
+      // Names only: values are credentials.
+      tracing::trace!("set-cookie {}", c.name());
       let expired = c.max_age().is_some_and(|a| a.is_zero());
       if c.value().is_empty() || c.value() == "deleted" || expired {
         if jar.remove(c.name()).is_some() {
