@@ -10,5 +10,6 @@ fn main() -> ExitCode {
   .platform::<media_xhs::Xhs>()
   .platform::<media_twitter::Twitter>()
   .platform::<media_bilibili::Bilibili>()
+  .platform::<media_reddit::Reddit>()
   .run()
 }

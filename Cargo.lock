@@ -2009,6 +2009,7 @@ version = "0.1.0"
 dependencies = [
  "media-bilibili",
  "media-core",
+ "media-reddit",
  "media-twitter",
  "media-xhs",
  "media-zhihu",
@@ -2040,6 +2041,21 @@ dependencies = [
  "url",
  "wreq",
  "wreq-util",
+]
+
+[[package]]
+name = "media-reddit"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "clap",
+ "jiff",
+ "media-core",
+ "regex",
+ "serde",
+ "serde_json",
+ "tracing",
+ "url",
 ]
 
 [[package]]

@@ -11,6 +11,7 @@ crates/media-zhihu          Zhihu
 crates/media-xhs            Xiaohongshu
 crates/media-twitter        Twitter / X
 crates/media-bilibili       Bilibili
+crates/media-reddit         Reddit
 ```
 
 Dependencies only point downwards: the binary depends on every crate,

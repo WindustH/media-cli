@@ -1,0 +1,17 @@
+[package]
+name = "media-reddit"
+description = "Reddit support for media-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+base64.workspace = true
+clap.workspace = true
+jiff.workspace = true
+media-core.workspace = true
+regex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+url.workspace = true

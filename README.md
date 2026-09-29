@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <strong>One command line for Zhihu, Xiaohongshu, Twitter / X and Bilibili.</strong>
+  <strong>One command line for Zhihu, Xiaohongshu, Twitter / X, Bilibili and Reddit.</strong>
 </p>
 
 <p align="center">
@@ -17,7 +17,7 @@
 
 ---
 
-`media` reads, searches, publishes and downloads on four social platforms
+`media` reads, searches, publishes and downloads on five social platforms
 with the same commands everywhere. It works in a terminal for people, and in
 scripts and AI agents through a stable JSON / YAML output.
 
@@ -47,34 +47,36 @@ $ media bili download '#1' --audio-only
 - **Log in the easy way.** Scan a QR code with the Zhihu, Xiaohongshu or
   Bilibili app, or paste a cookie header. Sessions stay on your machine.
 - **Much works without an account.** Bilibili videos, comments, users and
-  rankings; Twitter profiles, tweets and timelines; Xiaohongshu notes.
+  rankings; Twitter profiles, tweets and timelines; Xiaohongshu notes; Reddit
+  posts, comments, subreddits and users.
 - **Downloads included.** Original-quality images, videos with their audio
   merged, audio only, or speech-recognition-ready WAV segments.
 - **Behaves like a browser.** Chrome's network fingerprint, each platform's
   request signatures, and polite pacing keep requests looking ordinary.
 - **Platform extras.** Bilibili coins, 一键三连, subtitles, AI summaries and
   danmaku; Twitter retweets, quotes and lists; Zhihu questions, articles and
-  answers; Xiaohongshu creator notes.
+  answers; Xiaohongshu creator notes; Reddit subreddits, downvotes, crossposts
+  and galleries.
 
 ## What each platform supports
 
-| | Zhihu | Xiaohongshu | Twitter / X | Bilibili |
-| --- | :-: | :-: | :-: | :-: |
-| QR login | ✓ | ✓ | | ✓ |
-| search posts / users | ✓ | ✓ | ✓ | ✓ |
-| search topics | ✓ | ✓ | | |
-| hot, feed | ✓ | ✓ | ✓ | ✓ |
-| read, comments | ✓ | ✓ | ✓ | ✓ |
-| comment replies | ✓ | ✓ | | ✓ |
-| user, user posts | ✓ | ✓ | ✓ | ✓ |
-| followers, following | ✓ | | ✓ | ✓ |
-| collections, favorites | ✓ | favorites | ✓ | ✓ |
-| likes | | ✓ | ✓ | |
-| history | | | | ✓ |
-| notifications | ✓ | ✓ | ✓ | ✓ |
-| like, favorite, comment, follow | ✓ | ✓ | ✓ | ✓ |
-| post, delete | ✓ | ✓ | ✓ | ✓ |
-| download | ✓ | ✓ | ✓ | ✓ |
+| | Zhihu | Xiaohongshu | Twitter / X | Bilibili | Reddit |
+| --- | :-: | :-: | :-: | :-: | :-: |
+| QR login | ✓ | ✓ | | ✓ | |
+| search posts / users | ✓ | ✓ | ✓ | ✓ | ✓ |
+| search topics | ✓ | ✓ | | | ✓ |
+| hot, feed | ✓ | ✓ | ✓ | ✓ | ✓ |
+| read, comments | ✓ | ✓ | ✓ | ✓ | ✓ |
+| comment replies | ✓ | ✓ | | ✓ | ✓ |
+| user, user posts | ✓ | ✓ | ✓ | ✓ | ✓ |
+| followers, following | ✓ | | ✓ | ✓ | |
+| collections, favorites | ✓ | favorites | ✓ | ✓ | ✓ |
+| likes | | ✓ | ✓ | | ✓ |
+| history | | | | ✓ | |
+| notifications | ✓ | ✓ | ✓ | ✓ | ✓ |
+| like, favorite, comment, follow | ✓ | ✓ | ✓ | ✓ | ✓ |
+| post, delete | ✓ | ✓ | ✓ | ✓ | ✓ |
+| download | ✓ | ✓ | ✓ | ✓ | ✓ |
 
 ## Quick start
 
@@ -92,6 +94,7 @@ media bili search "rust 教程" -n 5
 media bili comments '#1'
 media x user-posts NASA -n 10
 media xhs read https://www.xiaohongshu.com/explore/68cfff45000000001003c253
+media reddit sub rust --sort top --time week -n 5
 ```
 
 Log in for everything else:
@@ -99,6 +102,7 @@ Log in for everything else:
 ```sh
 media bili login                 # scan the QR code with the Bilibili app
 media twitter login --cookie 'auth_token=...; ct0=...'
+media reddit login --browser     # reuse the session of your browser
 media zhihu status
 ```
 
@@ -111,11 +115,14 @@ media x read https://x.com/NASA/status/2104695667180380260 --json
 media bili subtitle BV1xx411c7mD
 media bili download BV1xx411c7mD --audio-only --split 25
 media twitter post "Hello" -i photo.jpg
+media reddit comments '#1' --sort top
+media reddit post "Hello from the terminal" --title "Hi" --topic r/test
+media reddit follow r/rust
 ```
 
 Each platform also answers to shorter names (`bilibili`, `x`, `xiaohongshu`,
-`zh` ...). Link the binary as `bili`, `xhs`, `twitter` or `zhihu` to skip the
-platform word entirely: `ln -s $(which media) ~/.local/bin/bili`.
+`zh`, `rd` ...). Link the binary as `bili`, `xhs`, `twitter`, `zhihu` or
+`reddit` to skip the platform word entirely: `ln -s $(which media) ~/.local/bin/bili`.
 
 ## Good to know
 
@@ -125,6 +132,10 @@ platform word entirely: `ln -s $(which media) ~/.local/bin/bili`.
   you only); `media <platform> logout` removes them.
 - `login --browser` reads the session from a local browser (Chrome, Edge,
   Firefox, Brave ...). To build without it, use `--no-default-features`.
+- Reddit refuses logged-out requests from some networks. Log in, or set
+  `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`, `REDDIT_USERNAME` and
+  `REDDIT_PASSWORD` for a personal "script" app from
+  <https://www.reddit.com/prefs/apps> to use Reddit's official API.
 - Keep bulk jobs slow: the platforms watch for automated use and may restrict
   accounts that look like bots.
 

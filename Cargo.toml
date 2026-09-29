@@ -24,6 +24,7 @@ media-zhihu = { path = "crates/media-zhihu" }
 media-xhs = { path = "crates/media-xhs" }
 media-twitter = { path = "crates/media-twitter" }
 media-bilibili = { path = "crates/media-bilibili" }
+media-reddit = { path = "crates/media-reddit" }
 
 aes = "0.8"
 base64 = "0.22"
@@ -52,6 +53,7 @@ media-zhihu.workspace = true
 media-xhs.workspace = true
 media-twitter.workspace = true
 media-bilibili.workspace = true
+media-reddit.workspace = true
 
 [profile.release]
 lto = "thin"
