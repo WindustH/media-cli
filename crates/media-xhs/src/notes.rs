@@ -101,6 +101,8 @@ async fn comment_page(c: &Client, id: &str, cursor: &str, token: &str) -> Result
   c.get(COMMENTS, &params).await
 }
 
+/// One page of the replies under a root comment, with the web app's
+/// parameters; the first page (empty cursor) starts at the oldest reply.
 pub async fn replies(
   c: &Client,
   arg: &str,
@@ -109,17 +111,18 @@ pub async fn replies(
 ) -> Result<Page<Comment>> {
   c.require_login()?;
   let r = refs::note_ref(c, arg).await?;
+  let token = token_for(c, &r).await?;
   let num = page.size_within(30).to_string();
   let cursor = page.cursor.clone().unwrap_or_default();
-  let mut params = vec![
+  let params = [
     ("note_id", r.id.as_str()),
     ("root_comment_id", comment),
     ("num", num.as_str()),
     ("cursor", cursor.as_str()),
+    ("image_formats", "jpg,webp,avif"),
+    ("top_comment_id", ""),
+    ("xsec_token", token.as_str()),
   ];
-  if let Some(token) = &r.token {
-    params.push(("xsec_token", token));
-  }
   Ok(comment_list(&c.get(SUB_COMMENTS, &params).await?))
 }
 

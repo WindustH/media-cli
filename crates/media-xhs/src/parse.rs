@@ -4,7 +4,7 @@
 
 use std::sync::LazyLock;
 
-use media_core::text::{from_millis, from_unix};
+use media_core::text::{from_millis, from_unix, parse_time};
 use media_core::{
   Collection, Comment, Extra, Media, Metrics, Notification, Post, User, UserStats, Value, ValueExt,
 };
@@ -138,6 +138,11 @@ pub fn note(item: &Value, source: &str) -> Option<Post> {
       comments: interact.count("comment_count"),
       shares: interact.first_count(&["share_count", "shared_count"]),
       favorites: interact.count("collected_count"),
+      other: interact
+        .count("nice_count")
+        .map(|n| ("nice".to_owned(), n))
+        .into_iter()
+        .collect(),
       ..Metrics::default()
     },
     media,
@@ -247,6 +252,12 @@ pub fn creator_note(v: &Value) -> Option<Post> {
     kind: kind(v),
     title: v.first_str(&["title", "display_title"]),
     url: Some(note_url(&id, token.as_deref(), SOURCE_FEED)),
+    // `time`: Unix milliseconds, or `2024-09-28 14:03` in Beijing time.
+    created_at: v.i64("time").and_then(from_unix).or_else(|| {
+      let t = v.str("time")?;
+      let t = if t.len() == 16 { format!("{t}:00") } else { t };
+      parse_time(&format!("{}+08:00", t.replacen(' ', "T", 1)))
+    }),
     metrics: Metrics {
       views: v.first_count(&["view_count"]),
       likes: v.first_count(&["liked_count", "likes", "interact_info.liked_count"]),
@@ -259,7 +270,12 @@ pub fn creator_note(v: &Value) -> Option<Post> {
       favorites: v.first_count(&["collected_count", "interact_info.collected_count"]),
       ..Metrics::default()
     },
-    extra: extra([("time", v.at("time")), ("status", v.at("status"))]),
+    extra: extra([
+      ("status", v.at("status")),
+      ("tab_status", v.at("tab_status")),
+      ("sticky", v.at("sticky")),
+      ("cover", v.at("images_list.0.url")),
+    ]),
     raw: Some(v.clone()),
     id,
     ..Post::default()
@@ -356,7 +372,7 @@ pub fn snake_keys(v: Value) -> Value {
   }
 }
 
-fn snake(key: &str) -> String {
+pub fn snake(key: &str) -> String {
   let mut out = String::with_capacity(key.len() + 4);
   for c in key.chars() {
     if c.is_ascii_uppercase() {
