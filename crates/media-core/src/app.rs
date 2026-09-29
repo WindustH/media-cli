@@ -83,6 +83,7 @@ impl App {
   }
 
   pub fn run(self) -> ExitCode {
+    restore_sigpipe();
     let mut args: Vec<OsString> = std::env::args_os().collect();
     let invoked = args
       .first()
@@ -187,4 +188,14 @@ fn init_logging(verbose: bool) {
     .with_writer(std::io::stderr)
     .without_time()
     .try_init();
+}
+
+/// Rust ignores SIGPIPE, so printing into a closed pipe (`media ... | head`)
+/// would panic; restore the default so the process just ends, like other tools.
+fn restore_sigpipe() {
+  #[cfg(unix)]
+  // SAFETY: called once at startup, before any threads exist.
+  unsafe {
+    libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+  }
 }

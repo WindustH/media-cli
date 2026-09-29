@@ -2025,6 +2025,7 @@ dependencies = [
  "html2text",
  "indicatif",
  "jiff",
+ "libc",
  "owo-colors",
  "qrcode",
  "rand 0.9.5",
