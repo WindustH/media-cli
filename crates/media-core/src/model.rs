@@ -429,9 +429,12 @@ pub struct Series {
 }
 
 /// One slice of a distribution, e.g. `search` in traffic sources.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Default, Serialize)]
 pub struct Share {
   pub label: String,
+  /// Id of what the slice stands for (a post, a region code ...), when it has one.
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub id: Option<String>,
   pub value: Value,
   /// Fraction of the whole (0..=1) when the platform reports or implies it.
   #[serde(skip_serializing_if = "Option::is_none")]
@@ -439,9 +442,13 @@ pub struct Share {
 }
 
 /// A distribution over one dimension: traffic source, age, gender, region, device ...
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Default, Serialize)]
 pub struct Breakdown {
   pub dimension: String,
+  /// What the numbers cover when it differs from the insights' `from`..`to`:
+  /// `lifetime`, `30d`, `yesterday` ...
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub period: Option<String>,
   pub items: Vec<Share>,
 }
 
@@ -462,6 +469,10 @@ pub struct Insights {
   pub from: Option<String>,
   #[serde(skip_serializing_if = "Option::is_none")]
   pub to: Option<String>,
+  /// What `totals` cover when it differs from `from`..`to` (for a post
+  /// usually `lifetime`).
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub totals_period: Option<String>,
   /// Headline numbers: `views`, `likes`, `new_followers`, `avg_watch_seconds`,
   /// `completion_rate` ... (snake_case, rates as 0..=1 fractions).
   #[serde(skip_serializing_if = "BTreeMap::is_empty")]
@@ -470,6 +481,10 @@ pub struct Insights {
   pub series: Vec<Series>,
   #[serde(skip_serializing_if = "Vec::is_empty")]
   pub breakdowns: Vec<Breakdown>,
+  /// Why data is missing or partial: a paid tier, a creator level, a
+  /// follower threshold, a panel that failed ... (sentences for people).
+  #[serde(skip_serializing_if = "Vec::is_empty")]
+  pub warnings: Vec<String>,
   #[serde(skip_serializing_if = "Extra::is_empty")]
   pub extra: Extra,
   #[serde(skip_serializing_if = "Option::is_none")]

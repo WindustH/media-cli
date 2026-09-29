@@ -99,8 +99,10 @@ pub fn breakdown(
         label,
         value: num(v),
         ratio: Some(round4(v / sum)),
+        ..Default::default()
       })
       .collect(),
+    ..Default::default()
   })
 }
 

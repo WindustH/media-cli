@@ -16,7 +16,9 @@ stderr with a non-zero exit code. Every row carries `platform` and
 - Comment threads are flattened: each comment is a row with `depth` and
   `parent_id`. `comments --all --replies` fetches every comment and every reply.
 - Insights give one row per headline number (`section=total`), trend point
-  (`section=series`, with `date`) and distribution slice (`section=breakdown`).
+  (`section=series`, with `date`), distribution slice (`section=breakdown`)
+  and warning (`section=warning`); `period` says what a number covers when it
+  is not the series window.
 - Listings of posts, comments and notifications take `--since` / `--until`
   (`7d`, `12h`, `2026-09-01` or an RFC 3339 time).
 
@@ -120,9 +122,12 @@ of anything created.
 your posts): `kind` (`account` / `post`), `subject`, `title`, `url`, `from` /
 `to` (days covered), `totals` (headline numbers such as `views`, `likes`,
 `new_followers`, `avg_watch_seconds`; rates as 0..1 fractions), `series`
-(`metric` + `points` of `date`, `value`) and `breakdowns` (`dimension` such as
-`traffic_source`, `age`, `gender`, `region`, with `items` of `label`, `value`,
-`ratio`).
+(`metric` + `points` of `date`, `value`), `breakdowns` (`dimension` such as
+`traffic_source`, `age`, `gender`, `region`, with `items` of `label`, `id`,
+`value`, `ratio`) and `warnings` (why data is missing or partial: a paid tier,
+a creator level, a follower threshold ...). `from` / `to` are the days the
+series cover; when `totals` or a breakdown cover something else, it says so
+in `totals_period` / `period` (for a post the totals are usually `lifetime`).
 
 `likers POST` lists the users who liked a post (a page of Users) and
 `reposts POST` its reposts / retweets / quotes / crossposts (a page of Posts).

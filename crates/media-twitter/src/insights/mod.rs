@@ -49,13 +49,17 @@ fn denied(e: &Error) -> bool {
   e.code == ErrorCode::PermissionDenied
 }
 
-/// Record that the Premium part was refused, in `extra` and on stderr.
+/// Record that the Premium part was refused, as a warning (the error code stays in `extra`).
 fn premium_required(out: &mut Insights, e: &Error) {
-  tracing::warn!("{}: {}", e.message, e.hint.as_deref().unwrap_or_default());
-  out.extra.insert(
-    "premium_required".into(),
-    json!({ "code": e.code.as_str(), "message": e.message, "hint": e.hint }),
-  );
+  let hint = e
+    .hint
+    .as_deref()
+    .map(|h| format!(" ({h})"))
+    .unwrap_or_default();
+  out.warnings.push(format!("{}{hint}", e.message));
+  out
+    .extra
+    .insert("premium_required".into(), json!(e.code.as_str()));
 }
 
 async fn own_id(api: &Api) -> Result<String> {

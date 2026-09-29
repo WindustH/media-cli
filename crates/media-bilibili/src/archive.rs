@@ -295,11 +295,13 @@ fn retention(g: &Value, i: &mut Insights) {
         label: format!("{}:{:02}", at / 60, at % 60),
         value: json!(pi::round4(share)),
         ratio: Some(pi::round4(share)),
+        ..Default::default()
       })
       .collect();
     i.breakdowns.push(Breakdown {
       dimension: "retention".into(),
       items,
+      ..Default::default()
     });
   }
 }

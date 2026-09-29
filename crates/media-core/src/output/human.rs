@@ -485,8 +485,15 @@ fn insights(i: &Insights) {
   if let Some(url) = &i.url {
     println!("{}", url.if_supports_color(Stream::Stdout, |t| t.cyan()));
   }
+  for w in &i.warnings {
+    println!(
+      "{} {w}",
+      "!".if_supports_color(Stream::Stdout, |t| t.yellow())
+    );
+  }
   if !i.totals.is_empty() {
-    let mut t = table(&["Metric", "Value"]);
+    let period = i.totals_period.as_deref().map(|p| format!("Value ({p})"));
+    let mut t = table(&["Metric", period.as_deref().unwrap_or("Value")]);
     for (k, v) in &i.totals {
       t.add_row(vec![
         Cell::new(k),
@@ -530,7 +537,11 @@ fn insights(i: &Insights) {
     }
   }
   for b in &i.breakdowns {
-    let mut t = table(&[b.dimension.as_str(), "Value", "Share", ""]);
+    let title = match &b.period {
+      Some(p) => format!("{} ({p})", b.dimension),
+      None => b.dimension.clone(),
+    };
+    let mut t = table(&[title.as_str(), "Value", "Share", ""]);
     for x in &b.items {
       let ratio = x
         .ratio

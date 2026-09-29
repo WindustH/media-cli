@@ -71,10 +71,7 @@ fn soft(e: &Error) -> bool {
 }
 
 fn unavailable(ins: &mut Insights, text: &str) {
-  let list = ins.extra.entry("unavailable".into()).or_insert(json!([]));
-  if let Some(a) = list.as_array_mut() {
-    a.push(json!(text));
-  }
+  ins.warnings.push(text.to_owned());
 }
 
 /// The rows under `key`; when there are none, the reason the page shows
@@ -121,12 +118,9 @@ pub async fn account(c: &Client, days: u32) -> Result<Insights> {
   let permission = get(c, PERMISSION, &[]).await?;
   if permission.i64("status") != Some(HAS_DATA) {
     let tip = permission.str("tip_msg").unwrap_or_default();
-    ins.extra.insert(
-      "notice".into(),
-      json!(format!(
-        "the data center (数据看板) is not enabled yet, numbers may be missing: {tip}"
-      )),
-    );
+    ins.warnings.push(format!(
+      "the data center (数据看板) is not enabled yet, numbers may be missing: {tip}"
+    ));
   }
   let base = panel(c, &mut ins, ACCOUNT, &[]).await?;
   let block = base.at(key);
@@ -213,7 +207,7 @@ pub async fn note(c: &Client, arg: &str, days: u32) -> Result<Insights> {
   };
   ins.extra.insert("scope".into(), json!("own"));
   // Totals cover the note's whole life; series only the last `days` days.
-  ins.extra.insert("totals_period".into(), json!("lifetime"));
+  ins.totals_period = Some("lifetime".into());
   let kind = info.str("type").map(|t| t.to_lowercase());
   if let Some(t) = &kind {
     ins.extra.insert("type".into(), json!(t));
@@ -274,9 +268,8 @@ async fn public(c: &Client, arg: &str) -> Result<Insights> {
     ins.total(name, Some(Value::from(*value)));
   }
   ins.extra.insert("scope".into(), json!("public"));
-  ins.extra.insert(
-    "notice".into(),
-    json!("not one of your notes: the creator center has data only for your own, these are its public counters"),
+  ins.warnings.push(
+    "not one of your notes: the creator center has data only for your own, these are its public counters".into(),
   );
   ins.raw = post.raw;
   Ok(ins)

@@ -282,6 +282,7 @@ fn push(
       label,
       value: v.into(),
       ratio: Some((v as f64 / total as f64 * 10_000.0).round() / 10_000.0),
+      ..Default::default()
     })
     .collect();
   if rank {
@@ -290,6 +291,7 @@ fn push(
   out.push(Breakdown {
     dimension: dimension.into(),
     items,
+    ..Default::default()
   });
 }
 

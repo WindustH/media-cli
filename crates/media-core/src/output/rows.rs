@@ -42,7 +42,7 @@ fn insights(i: &Insights) -> Vec<Value> {
   let mut out = Vec::new();
   for (metric, v) in &i.totals {
     out.push(with(
-      json!({ "section": "total", "metric": metric, "value": v }),
+      json!({ "section": "total", "metric": metric, "value": v, "period": i.totals_period }),
     ));
   }
   for s in &i.series {
@@ -55,9 +55,13 @@ fn insights(i: &Insights) -> Vec<Value> {
   for b in &i.breakdowns {
     for x in &b.items {
       out.push(with(json!({
-        "section": "breakdown", "dimension": b.dimension, "label": x.label, "value": x.value, "ratio": x.ratio,
+        "section": "breakdown", "dimension": b.dimension, "label": x.label, "id": x.id,
+        "value": x.value, "ratio": x.ratio, "period": b.period,
       })));
     }
+  }
+  for w in &i.warnings {
+    out.push(with(json!({ "section": "warning", "value": w })));
   }
   out
 }

@@ -93,11 +93,13 @@ fn breakdown(dimension: &str, counts: BTreeMap<String, i64>) -> Option<Breakdown
       label,
       value: n.into(),
       ratio: (whole > 0 && n > 0).then(|| n as f64 / whole as f64),
+      ..Default::default()
     })
     .collect();
   (!items.is_empty()).then(|| Breakdown {
     dimension: dimension.into(),
     items,
+    ..Default::default()
   })
 }
 
@@ -245,9 +247,7 @@ pub async fn account(api: &Api, days: u32) -> Result<Insights> {
      now, counted on the day the post or comment was created"
       .into(),
   );
-  if !missing.is_empty() {
-    x.insert("unavailable".into(), missing.into());
-  }
+  ins.warnings.extend(missing);
   ins.raw = Some(json!({ "me": me, "karma": karma, "trophies": trophies }));
   Ok(ins)
 }

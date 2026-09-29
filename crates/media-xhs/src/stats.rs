@@ -185,12 +185,14 @@ pub fn breakdown(ins: &mut Insights, dimension: &str, items: &[Value], percent: 
         false => (sum > 0.0).then(|| round(value / sum)),
       },
       value: number(&json!(value), Count).unwrap_or(Value::Null),
+      ..Default::default()
     })
     .collect();
   if !items.is_empty() {
     ins.breakdowns.push(Breakdown {
       dimension: dimension.to_owned(),
       items,
+      ..Default::default()
     });
   }
 }
@@ -215,6 +217,7 @@ pub fn diagnosis(ins: &mut Insights, dimension: &str, infos: &[Value]) {
         label: quota_name(&quota),
         value: number(i.at("count"), Count).unwrap_or(Value::Null),
         ratio: i.f64("scale").filter(|s| *s >= 0.0).map(round),
+        ..Default::default()
       })
     })
     .collect();
@@ -222,6 +225,7 @@ pub fn diagnosis(ins: &mut Insights, dimension: &str, infos: &[Value]) {
     ins.breakdowns.push(Breakdown {
       dimension: dimension.to_owned(),
       items,
+      ..Default::default()
     });
   }
 }

@@ -135,10 +135,14 @@ pub async fn account(ctx: &Ctx, days: u32) -> Result<Insights> {
   if let Some(updated) = aggr.str("updated") {
     ins.extra.insert("updated".into(), updated.into());
   }
-  ins.extra.insert(
-    "portrait_period".into(),
-    "reader portraits cover what Zhihu reports, not only the window".into(),
-  );
+  // Reader portraits are what Zhihu reports overall, not only the window.
+  for b in ins
+    .breakdowns
+    .iter_mut()
+    .filter(|b| !matches!(b.dimension.as_str(), "content_type"))
+  {
+    b.period.get_or_insert_with(|| "lifetime".into());
+  }
   ins.extra.insert("metric_names".into(), names());
   ins.raw = Some(json!({
     "aggr": aggr, "daily": daily, "follow": follow, "follower_changes": changes,
@@ -165,8 +169,10 @@ fn content_types(follow: &Value, me: &media_core::User) -> Option<Breakdown> {
         label,
         value: n.into(),
         ratio: Some(n as f64 / total as f64),
+        ..Default::default()
       })
       .collect(),
+    ..Default::default()
   })
 }
 

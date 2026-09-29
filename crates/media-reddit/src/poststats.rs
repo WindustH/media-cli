@@ -101,11 +101,16 @@ fn parse(main: &str) -> Stats {
         ratio: attr(&it[1], "percentage")
           .and_then(|p| p.trim().parse::<f64>().ok())
           .map(|p| if p > 1.0 { p / 100.0 } else { p }),
+        ..Default::default()
       })
       .collect();
     if !items.is_empty() {
       let dimension = snake(&title);
-      stats.breakdowns.push(Breakdown { dimension, items });
+      stats.breakdowns.push(Breakdown {
+        dimension,
+        items,
+        ..Default::default()
+      });
     }
   }
   // Headline numbers: outside the breakdowns, labelled by the text before them.

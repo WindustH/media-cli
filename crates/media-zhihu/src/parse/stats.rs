@@ -220,6 +220,7 @@ pub fn portrait(v: &Value, prefix: &str) -> Vec<Breakdown> {
           label: gender(&label).unwrap_or(label),
           value: x.at("real_value").clone(),
           ratio,
+          ..Default::default()
         })
       })
       .map(|mut s| {
@@ -240,6 +241,7 @@ pub fn portrait(v: &Value, prefix: &str) -> Vec<Breakdown> {
     out.push(Breakdown {
       dimension: format!("{prefix}{dimension}"),
       items,
+      ..Default::default()
     });
   }
   out
