@@ -76,7 +76,7 @@ pub async fn call_public(ctx: &Ctx, req: Req<'_>) -> Result<Value> {
   Err(error(ctx, resp.status.as_u16(), &body, &resp.text()))
 }
 
-fn error(ctx: &Ctx, status: u16, body: &Value, text: &str) -> Error {
+pub fn error(ctx: &Ctx, status: u16, body: &Value, text: &str) -> Error {
   let code = body.i64("error.code");
   let message = body
     .first_str(&["error.message", "message"])

@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use media_core::{Ctx, Error, QrStatus, QrTicket, Result, User, Value, ValueExt};
+use media_core::{Ctx, Error, ErrorCode, QrStatus, QrTicket, Result, User, Value, ValueExt};
 
 use crate::api::{self, V3, V4, WWW};
 use crate::parse;
@@ -81,11 +81,14 @@ pub async fn qr_start(ctx: &Ctx) -> Result<QrTicket> {
   let url = v
     .str("link")
     .ok_or_else(|| Error::upstream("the QR code API returned no link"))?;
-  Ok(QrTicket {
+  let ticket = QrTicket {
     url,
     token,
     extra: BTreeMap::new(),
-  })
+  };
+  // Poll once before the code is shown, so a blocked network fails before anyone scans.
+  qr_poll(ctx, &ticket).await?;
+  Ok(ticket)
 }
 
 pub async fn qr_poll(ctx: &Ctx, ticket: &QrTicket) -> Result<QrStatus> {
@@ -107,7 +110,19 @@ pub async fn qr_poll(ctx: &Ctx, ticket: &QrTicket) -> Result<QrStatus> {
     return Ok(QrStatus::Expired);
   }
   if !resp.status.is_success() {
-    // Transient failures: keep polling until the core gives up.
+    let err = api::error(ctx, resp.status.as_u16(), &v, &resp.text());
+    // Risk control does not clear by polling: report it instead of waiting out the timeout.
+    if err.code == ErrorCode::VerificationRequired {
+      let check = v
+        .str("error.redirect")
+        .map(|url| format!("pass the check in a browser ({url}), "))
+        .unwrap_or_default();
+      return Err(err.with_hint(format!(
+        "Zhihu flagged this network; {check}retry later or through another network (`--proxy`), or log in with `--browser` / `--cookie`"
+      )));
+    }
+    tracing::debug!("scan_info {}: {}", resp.status, resp.text());
+    // Other failures may be transient: keep polling until the core gives up.
     return Ok(QrStatus::Waiting);
   }
   absorb_cookies(ctx, &v);
