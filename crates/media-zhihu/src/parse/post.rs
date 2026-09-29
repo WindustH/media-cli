@@ -44,12 +44,14 @@ pub fn answer(v: &Value) -> Post {
   p.text = text(&html);
   p.media = images(&html);
   p.metrics = Metrics {
+    views: v.count("visit_count"),
     likes: v.count("voteup_count"),
     comments: v.count("comment_count"),
     favorites: v.count("favlists_count"),
     ..Metrics::default()
   };
   other(&mut p.metrics, v, &[("thanks", "thanks_count")]);
+  statistics(&mut p.metrics, v);
   if let Some(q) = question {
     p.extra.insert("question_id".into(), q.into());
   }
@@ -66,6 +68,7 @@ pub fn question(v: &Value) -> Post {
   p.tags = topics(v);
   p.metrics = Metrics {
     views: v.count("visit_count"),
+    likes: v.count("voteup_count"),
     comments: v.count("comment_count"),
     ..Metrics::default()
   };
@@ -96,6 +99,7 @@ pub fn article(v: &Value) -> Post {
     favorites: v.count("favlists_count"),
     ..Metrics::default()
   };
+  statistics(&mut p.metrics, v);
   if let Some(column) = v.str("column.title") {
     p.extra.insert("column".into(), column.into());
   }
@@ -135,12 +139,15 @@ pub fn pin(v: &Value) -> Post {
   p.text = text(&html);
   p.tags = topics(v);
   p.metrics = Metrics {
+    // A pin's `like_count` is its old 赞 counter; 赞同 is `reaction_count`.
     likes: v.first_count(&["reaction_count", "like_count"]),
     comments: v.count("comment_count"),
     shares: v.count("repin_count"),
-    favorites: v.count("favlists_count"),
+    favorites: v.first_count(&["favlists_count", "favorite_count"]),
+    views: v.count("page_view_count").filter(|n| *n > 0),
     ..Metrics::default()
   };
+  statistics(&mut p.metrics, v);
   if v.at("origin_pin").is_object() {
     p.quoted = Some(Box::new(pin(v.at("origin_pin"))));
   }
@@ -164,6 +171,30 @@ fn topics(v: &Value) -> Vec<String> {
     .iter()
     .filter_map(|t| t.str("name"))
     .collect()
+}
+
+/// Counters of `reaction.statistics`, which current payloads carry next to (or
+/// instead of) the older fields: 喜欢 (`hearts`), down votes, plays, danmaku.
+fn statistics(m: &mut Metrics, v: &Value) {
+  let s = v.at("reaction.statistics");
+  if !s.is_object() {
+    return;
+  }
+  m.likes = m.likes.or_else(|| s.count("up_vote_count"));
+  m.comments = m.comments.or_else(|| s.count("comment_count"));
+  m.favorites = m.favorites.or_else(|| s.count("favorites"));
+  m.shares = m.shares.or_else(|| s.count("share_count"));
+  for (key, field, always) in [
+    ("hearts", "like_count", true),
+    ("down_votes", "down_vote_count", true),
+    ("plays", "play_count", false),
+    ("danmaku", "bullet_count", false),
+    ("applauds", "applaud_count", false),
+  ] {
+    if let Some(n) = s.count(field).filter(|n| always || *n > 0) {
+      m.other.entry(key.into()).or_insert(n);
+    }
+  }
 }
 
 fn other(m: &mut Metrics, v: &Value, fields: &[(&str, &str)]) {

@@ -14,7 +14,7 @@ pub async fn whoami(ctx: &Ctx) -> Result<User> {
     ctx,
     api::get(ctx, &format!("{V4}/me")).query(
       "include",
-      "answer_count,articles_count,pins_count,question_count,follower_count,following_count,voteup_count,description",
+      "answer_count,articles_count,pins_count,question_count,zvideo_count,columns_count,follower_count,following_count,voteup_count,thanked_count,favorited_count,description",
     ),
   )
   .await?;

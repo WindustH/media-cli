@@ -3,11 +3,10 @@
 use std::path::PathBuf;
 
 use media_core::cli::PageArgs;
-use media_core::paging::collect;
 use media_core::{Ctx, Data, Error, Page, Result};
 
 use crate::refs::{self, Target};
-use crate::{people, publish, read, write};
+use crate::{insights, people, publish, read, write};
 
 #[derive(Debug, clap::Subcommand)]
 pub enum Extra {
@@ -75,6 +74,14 @@ pub enum Extra {
     #[command(flatten)]
     page: PageArgs,
   },
+  /// Your own posts with their lifetime numbers from the creator center (内容分析)
+  Creations {
+    /// Content type
+    #[arg(short = 't', long = "type", default_value = "answer", value_parser = ["answer", "article", "pin"])]
+    kind: String,
+    #[command(flatten)]
+    page: PageArgs,
+  },
 }
 
 pub async fn run(ctx: &Ctx, command: Extra) -> Result<Data> {
@@ -85,9 +92,7 @@ pub async fn run(ctx: &Ctx, command: Extra) -> Result<Data> {
       page,
     } => {
       let id = Target::question(&ctx.post_ref(&question)?)?;
-      let posts = collect(page.limit, page.cursor, async |r| {
-        read::answers(ctx, &id, &sort, &r).await
-      });
+      let posts = page.collect_dated(async |r| read::answers(ctx, &id, &sort, &r).await);
       Ok(Data::Posts(posts.await?))
     }
     Extra::Ask {
@@ -127,9 +132,7 @@ pub async fn run(ctx: &Ctx, command: Extra) -> Result<Data> {
     Extra::Topic { id, essence, page } => {
       let id = topic_id(&id)?;
       if essence {
-        let posts = collect(page.limit, page.cursor, async |r| {
-          read::topic_essence(ctx, &id, &r).await
-        });
+        let posts = page.collect_dated(async |r| read::topic_essence(ctx, &id, &r).await);
         Ok(Data::Posts(posts.await?))
       } else {
         let topic = read::topic(ctx, &id).await?;
@@ -138,16 +141,16 @@ pub async fn run(ctx: &Ctx, command: Extra) -> Result<Data> {
     }
     Extra::UserArticles { user, page } => {
       let token = refs::user(&ctx.user_ref(&user)?)?;
-      let posts = collect(page.limit, page.cursor, async |r| {
-        people::articles(ctx, &token, &r).await
-      });
+      let posts = page.collect_dated(async |r| people::articles(ctx, &token, &r).await);
       Ok(Data::Posts(posts.await?))
     }
     Extra::UserPins { user, page } => {
       let token = refs::user(&ctx.user_ref(&user)?)?;
-      let posts = collect(page.limit, page.cursor, async |r| {
-        people::pins(ctx, &token, &r).await
-      });
+      let posts = page.collect_dated(async |r| people::pins(ctx, &token, &r).await);
+      Ok(Data::Posts(posts.await?))
+    }
+    Extra::Creations { kind, page } => {
+      let posts = page.collect_dated(async |r| insights::creations(ctx, &kind, &r).await);
       Ok(Data::Posts(posts.await?))
     }
   }
