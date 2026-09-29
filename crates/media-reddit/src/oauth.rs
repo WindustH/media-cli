@@ -130,22 +130,6 @@ impl Credentials {
         expires,
       },
     );
-    self.restrict_cache(ctx);
     Ok(token)
-  }
-
-  /// The cache file holds a live token: keep it readable by the owner only.
-  fn restrict_cache(&self, ctx: &Ctx) {
-    #[cfg(unix)]
-    {
-      use std::os::unix::fs::PermissionsExt;
-      let path = ctx
-        .store
-        .cache_dir()
-        .join(format!("{}.json", self.cache_key()));
-      let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
-    }
-    #[cfg(not(unix))]
-    let _ = ctx;
   }
 }

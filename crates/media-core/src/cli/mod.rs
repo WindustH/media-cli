@@ -156,8 +156,7 @@ async fn execute<P: Platform>(
 
   let ctx = platform.ctx();
   // Only logged-in sessions are saved; guest cookies are not worth keeping.
-  let logged_in = info.required_cookies.iter().all(|c| ctx.http.has_cookie(c));
-  if persist && logged_in && !loaded.from_env && ctx.session_changed() {
+  if persist && platform.logged_in() && !loaded.from_env && ctx.session_changed() {
     let mut session = ctx.session();
     session.source = loaded.session.source.clone();
     session.saved_at = loaded.session.saved_at;

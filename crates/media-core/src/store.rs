@@ -126,13 +126,14 @@ impl Store {
     serde_json::from_slice(&fs::read(path).ok()?).ok()
   }
 
-  /// Best effort: a failed cache write never fails the command.
+  /// Best effort: a failed cache write never fails the command. Files are
+  /// private to the user (caches may hold tokens).
   pub fn cache_put<T: Serialize>(&self, key: &str, value: &T) {
     let write = || -> Result<()> {
       fs::create_dir_all(&self.cache_dir)?;
-      fs::write(
-        self.cache_dir.join(format!("{key}.json")),
-        serde_json::to_vec(value)?,
+      write_private(
+        &self.cache_dir.join(format!("{key}.json")),
+        &serde_json::to_vec(value)?,
       )?;
       Ok(())
     };

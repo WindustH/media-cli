@@ -185,7 +185,6 @@ pub fn logout<P: Platform>(ctx: &Ctx) -> Result<Data> {
 }
 
 pub async fn status<P: Platform>(p: &P, loaded: &Loaded) -> Result<(Data, ExitCode)> {
-  let info = P::INFO;
   let not_logged_in = |message: String| {
     let status = AuthStatus {
       message: Some(message),
@@ -193,11 +192,8 @@ pub async fn status<P: Platform>(p: &P, loaded: &Loaded) -> Result<(Data, ExitCo
     };
     Ok((Data::Auth(status), ExitCode::FAILURE))
   };
-  if let Some(c) = missing_cookie(&info, p.ctx()) {
-    return not_logged_in(format!(
-      "no session (cookie `{c}` missing); {}",
-      p.ctx().login_hint()
-    ));
+  if !p.logged_in() {
+    return not_logged_in(format!("no session; {}", p.ctx().login_hint()));
   }
   match p.whoami().await {
     Ok(user) => Ok((

@@ -254,6 +254,17 @@ pub trait Platform: Sized {
   /// The logged-in account; fails with `not_authenticated` when the session is not valid.
   async fn whoami(&self) -> Result<User>;
 
+  /// Whether credentials are present (not whether they still work). Defaults
+  /// to the required cookies; platforms with other credentials override it.
+  fn logged_in(&self) -> bool {
+    let ctx = self.ctx();
+    ctx
+      .info
+      .required_cookies
+      .iter()
+      .all(|c| ctx.http.has_cookie(c))
+  }
+
   /// Called after cookies were imported (cookie string or browser), before they are
   /// verified and saved. Use it to fetch missing helper cookies.
   async fn prepare_login(&self) -> Result<()> {

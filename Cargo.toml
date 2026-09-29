@@ -3,7 +3,7 @@ name = "media-cli"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
-description = "One command line for Zhihu, Xiaohongshu, Twitter/X and Bilibili"
+description = "One command line for Zhihu, Xiaohongshu, Twitter/X, Bilibili and Reddit"
 
 [[bin]]
 name = "media"

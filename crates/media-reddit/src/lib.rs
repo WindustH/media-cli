@@ -94,6 +94,10 @@ impl Platform for Reddit {
     users::whoami(&self.api).await
   }
 
+  fn logged_in(&self) -> bool {
+    self.api.logged_in()
+  }
+
   async fn prepare_login(&self) -> Result<()> {
     self.api.reset_account();
     Ok(())

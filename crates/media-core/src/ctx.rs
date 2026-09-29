@@ -36,17 +36,13 @@ impl Ctx {
   /// How to log in, for error hints.
   pub fn login_hint(&self) -> String {
     let id = self.info.id;
-    let browser = if cfg!(feature = "browser") {
-      format!(", `media {id} login --browser`")
-    } else {
-      String::new()
-    };
-    if self.info.supports(Cap::QrLogin) {
-      format!("run `media {id} login` (QR code){browser} or `media {id} login --cookie '...'`")
-    } else {
-      format!(
-        "run `media {id} login --cookie '...'` with the cookie header of a logged-in browser{browser}"
-      )
+    let cookie = format!("`media {id} login --cookie '...'`");
+    let browser = format!("`media {id} login --browser`");
+    match (self.info.supports(Cap::QrLogin), cfg!(feature = "browser")) {
+      (true, true) => format!("run `media {id} login` (QR code), {browser} or {cookie}"),
+      (true, false) => format!("run `media {id} login` (QR code) or {cookie}"),
+      (false, true) => format!("run {browser} (a browser where you are logged in) or {cookie}"),
+      (false, false) => format!("run {cookie} with the cookie header of a logged-in browser"),
     }
   }
 
