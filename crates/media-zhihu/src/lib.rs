@@ -10,6 +10,7 @@ mod api;
 mod comments;
 mod extra;
 mod insights;
+mod markup;
 mod parse;
 mod people;
 mod publish;

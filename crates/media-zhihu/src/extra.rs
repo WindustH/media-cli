@@ -33,11 +33,27 @@ pub enum Extra {
     #[arg(short = 'i', long = "image", value_name = "PATH")]
     images: Vec<PathBuf>,
   },
+  /// Answer a question (回答)
+  Answer {
+    /// Question id, q:<id> or URL
+    question: String,
+    /// Body text; `-` reads it from stdin
+    body: String,
+    /// Read the body as Markdown (headings, lists, quotes, code, tables, inline images)
+    #[arg(short, long)]
+    markdown: bool,
+    /// Attach an image at the end (repeatable)
+    #[arg(short = 'i', long = "image", value_name = "PATH")]
+    images: Vec<PathBuf>,
+  },
   /// Publish a column article (文章)
   Article {
     title: String,
     /// Body text; `-` reads it from stdin
     body: String,
+    /// Read the body as Markdown (headings, lists, quotes, code, tables, inline images)
+    #[arg(short, long)]
+    markdown: bool,
     /// Topic id (repeatable)
     #[arg(short = 't', long = "topic", value_name = "TOPIC")]
     topics: Vec<String>,
@@ -105,22 +121,28 @@ pub async fn run(ctx: &Ctx, command: Extra) -> Result<Data> {
       let done = publish::question(ctx, title.trim(), &detail, &topics, &images);
       Ok(Data::Action(done.await?))
     }
+    Extra::Answer {
+      question,
+      body,
+      markdown,
+      images,
+    } => {
+      let id = Target::question(&ctx.post_ref(&question)?)?;
+      let body = read_body(body, "the answer")?;
+      check("answer", &images)?;
+      let done = publish::answer(ctx, &id, &body, markdown, &images);
+      Ok(Data::Action(done.await?))
+    }
     Extra::Article {
       title,
       body,
+      markdown,
       topics,
       images,
     } => {
-      let body = if body == "-" {
-        std::io::read_to_string(std::io::stdin())?
-      } else {
-        body
-      };
+      let body = read_body(body, "the article body")?;
       check(&title, &images)?;
-      if body.trim().is_empty() {
-        return Err(Error::input("the article body is empty"));
-      }
-      let done = publish::article(ctx, title.trim(), &body, &topics, &images);
+      let done = publish::article(ctx, title.trim(), &body, markdown, &topics, &images);
       Ok(Data::Action(done.await?))
     }
     Extra::FollowQuestion { question, undo } => {
@@ -154,6 +176,19 @@ pub async fn run(ctx: &Ctx, command: Extra) -> Result<Data> {
       Ok(Data::Posts(posts.await?))
     }
   }
+}
+
+/// The body argument, or standard input for `-`; empty bodies are refused.
+fn read_body(body: String, what: &str) -> Result<String> {
+  let body = if body == "-" {
+    std::io::read_to_string(std::io::stdin())?
+  } else {
+    body
+  };
+  if body.trim().is_empty() {
+    return Err(Error::input(format!("{what} is empty")));
+  }
+  Ok(body)
 }
 
 fn check(title: &str, images: &[PathBuf]) -> Result<()> {

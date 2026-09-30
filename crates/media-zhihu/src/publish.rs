@@ -8,7 +8,8 @@ use media_core::http::Method;
 use media_core::{Action, Ctx, Error, Result, Value, ValueExt, json};
 
 use crate::api::{self, MOBILE, V4, WWW, ZHUANLAN};
-use crate::refs::{article_url, question_url};
+use crate::markup;
+use crate::refs::{answer_url, article_url, question_url};
 use crate::sign;
 use crate::write::prepare;
 
@@ -153,6 +154,30 @@ fn images_html(images: &[Image]) -> String {
   images.iter().map(Image::html).collect()
 }
 
+/// A body as editor HTML with its length in characters: plain text as one
+/// paragraph per line, or `markdown` with its images uploaded in place.
+/// The flag says whether the HTML holds uploaded images.
+async fn body_html(
+  ctx: &Ctx,
+  body: &str,
+  markdown: bool,
+  source: &str,
+) -> Result<(String, usize, bool)> {
+  if !markdown {
+    return Ok((paragraphs(body), body.chars().count(), false));
+  }
+  let m = markup::render(body);
+  if let Some(missing) = m.images.iter().find(|p| !p.is_file()) {
+    return Err(Error::input(format!(
+      "image not found: {}",
+      missing.display()
+    )));
+  }
+  let images = upload_all(ctx, &m.images, source).await?;
+  let html: Vec<String> = images.iter().map(Image::html).collect();
+  Ok((m.fill(&html), m.text_len, !images.is_empty()))
+}
+
 async fn content_draft(ctx: &Ctx, action: &str) -> Result<String> {
   let v = api::call(
     ctx,
@@ -280,12 +305,13 @@ pub async fn article(
   ctx: &Ctx,
   title: &str,
   body: &str,
+  markdown: bool,
   topics: &[String],
   images: &[PathBuf],
 ) -> Result<Action> {
   prepare(ctx).await?;
-  let html = paragraphs(body);
-  let id = if images.is_empty() {
+  let (html, text_len, inline_images) = body_html(ctx, body, markdown, "article").await?;
+  let id = if images.is_empty() && !inline_images {
     let draft = api::call(
       ctx,
       api::post(ctx, &format!("{ZHUANLAN}/articles/drafts")).json(&json!({})),
@@ -309,7 +335,7 @@ pub async fn article(
     let draft = content_draft(ctx, "article").await?;
     let data = json!({
       "title": { "title": title },
-      "hybrid": { "html": html + &images_html(&images), "textLength": body.chars().count() },
+      "hybrid": { "html": html + &images_html(&images), "textLength": text_len },
       "extra_info": { "publisher": "pc" },
       "draft": { "disabled": 1, "id": draft },
       "commentsPermission": { "comment_permission": "anyone" },
@@ -319,6 +345,51 @@ pub async fn article(
   Ok(
     Action::done("publish", "article")
       .with_url(article_url(&id))
+      .with_id(id),
+  )
+}
+
+/// Answer a question through the editor's publish endpoint.
+pub async fn answer(
+  ctx: &Ctx,
+  question: &str,
+  body: &str,
+  markdown: bool,
+  images: &[PathBuf],
+) -> Result<Action> {
+  prepare(ctx).await?;
+  let (html, text_len, _) = body_html(ctx, body, markdown, "answer").await?;
+  let images = upload_all(ctx, images, "answer").await?;
+  let business = json!({
+    "reshipment_settings": "allowed", "comment_permission": "all",
+    "reward_setting": { "can_reward": false }, "disclaimer_status": "close",
+    "disclaimer_type": "none", "commercial_report_info": { "is_report": false },
+    "commercial_zhitask_bind_info": null, "is_report": false,
+    "table_of_contents_enabled": false, "thank_inviter_status": "close", "thank_inviter": "",
+  });
+  let data = json!({
+    "publish": { "traceId": trace_id() },
+    "hybridInfo": {},
+    "draft": { "isPublished": false, "disabled": 1 },
+    "extra_info": {
+      "question_id": question, "publisher": "pc",
+      "pc_business_params": business.to_string(),
+    },
+    "hybrid": { "html": html + &images_html(&images), "textLength": text_len },
+    "reprint": { "reshipment_settings": "allowed" },
+    "commentsPermission": { "comment_permission": "all" },
+    "appreciate": { "can_reward": false },
+    "publishSwitch": { "draft_type": "normal" },
+    "creationStatement": { "disclaimer_status": "close", "disclaimer_type": "none" },
+    "commercialReportInfo": { "isReport": 0 },
+    "toFollower": {},
+    "contentsTables": { "table_of_contents_enabled": false },
+    "thanksInvitation": { "thank_inviter_status": "close", "thank_inviter": "" },
+  });
+  let id = content_publish(ctx, &json!({ "action": "answer", "data": data })).await?;
+  Ok(
+    Action::done("publish", "answer")
+      .with_url(answer_url(&id, Some(question)))
       .with_id(id),
   )
 }
