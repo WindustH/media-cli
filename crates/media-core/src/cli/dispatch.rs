@@ -147,7 +147,7 @@ pub(super) async fn common<P: Platform>(
     }
     C::User { user } => ok(Data::User(Box::new(p.user(&ctx.user_ref(&user)?).await?))),
     C::UserPosts { user, page } => {
-      let user = ctx.user_ref(&user)?;
+      let user = user_or_me(p, user).await?;
       ok(Data::Posts(
         page
           .collect_dated(async |r| p.user_posts(&user, &r).await)
@@ -155,13 +155,13 @@ pub(super) async fn common<P: Platform>(
       ))
     }
     C::Followers { user, page } => {
-      let user = ctx.user_ref(&user)?;
+      let user = user_or_me(p, user).await?;
       ok(Data::Users(
         page.collect(async |r| p.followers(&user, &r).await).await?,
       ))
     }
     C::Following { user, page } => {
-      let user = ctx.user_ref(&user)?;
+      let user = user_or_me(p, user).await?;
       ok(Data::Users(
         page.collect(async |r| p.following(&user, &r).await).await?,
       ))
@@ -299,4 +299,12 @@ async fn complete_replies<P: Platform>(
     Box::pin(complete_replies(p, post, &mut c.replies, depth + 1)).await?;
   }
   Ok(())
+}
+
+/// A user argument, or the logged-in account when it is omitted.
+async fn user_or_me<P: Platform>(p: &P, user: Option<String>) -> Result<String> {
+  match user {
+    Some(u) => p.ctx().user_ref(&u),
+    None => Ok(p.whoami().await?.reference().to_owned()),
+  }
 }

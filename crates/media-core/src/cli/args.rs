@@ -246,22 +246,22 @@ pub enum CommonCommand {
   },
   /// Show a user profile
   User { user: String },
-  /// Posts of a user
+  /// Posts of a user (yours when USER is omitted)
   #[command(visible_alias = "posts")]
   UserPosts {
-    user: String,
+    user: Option<String>,
     #[command(flatten)]
     page: PageArgs,
   },
-  /// Followers of a user
+  /// Followers of a user (yours when USER is omitted)
   Followers {
-    user: String,
+    user: Option<String>,
     #[command(flatten)]
     page: PageArgs,
   },
-  /// Accounts a user follows
+  /// Accounts a user follows (yours when USER is omitted)
   Following {
-    user: String,
+    user: Option<String>,
     #[command(flatten)]
     page: PageArgs,
   },
