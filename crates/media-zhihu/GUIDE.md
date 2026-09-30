@@ -36,10 +36,19 @@ lifetime numbers.
 - `answers QUESTION [--sort default|created]`, `topic ID [--essence]`,
   `user-articles USER`, `user-pins USER`.
 - `post` publishes a pin (想法) with optional `--title` and images; `ask
-  TITLE [-d DETAIL] [-t TOPIC] [-i IMAGE]` asks a question; `article TITLE
-  BODY` publishes a column article (`-` reads the body from stdin).
+  TITLE [-d DETAIL] [-t TOPIC] [-i IMAGE]` asks a question.
+- `answer QUESTION BODY [-m] [-i IMAGE]` answers a question and `article
+  TITLE BODY [-m] [-t TOPIC] [-i IMAGE]` publishes a column article; `-` as
+  BODY reads it from stdin: `media zhihu answer q:123 - -m < answer.md`.
 - `follow-question QUESTION [--undo]`.
 - `delete` removes your own pin, article, question or answer.
+
+With `-m / --markdown` the body is read as Markdown: `#` / `##` headings
+(deeper levels become bold), `-` and `1.` lists, `>` quotes, fenced code,
+`|` tables, `---` rules, `**bold**`, `` `code` ``, `[text](url)` links, an
+image alone on its line (`![caption](path)`, uploaded and placed there), and
+a link alone on its line with the title `"card"` (`[text](url "card")`) as a
+link card. Without it, every line becomes a paragraph.
 
 ## Limits
 
