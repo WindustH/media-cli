@@ -83,6 +83,7 @@ impl Platform for Twitter {
       notification_kind: &["all", "verified", "mentions"],
     },
     min_interval: Duration::from_millis(1500),
+    guide: include_str!("../GUIDE.md"),
   };
 
   type Extra = extra::Command;

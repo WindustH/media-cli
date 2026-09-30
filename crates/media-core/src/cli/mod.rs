@@ -85,7 +85,11 @@ pub fn command<P: Platform>() -> clap::Command {
     .long_about(None)
     .visible_aliases(info.aliases.iter().copied())
     .subcommand_required(true)
-    .arg_required_else_help(true);
+    .arg_required_else_help(true)
+    .after_help(format!(
+      "Guide: `media guide {}` (references, login, analytics, limits); `media guide` for all topics.",
+      info.id
+    ));
   let names: Vec<String> = cmd
     .get_subcommands()
     .map(|s| s.get_name().to_owned())

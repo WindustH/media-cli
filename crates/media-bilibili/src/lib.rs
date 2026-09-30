@@ -108,6 +108,7 @@ impl Platform for Bilibili {
       notification_kind: &["reply", "at", "like"],
     },
     min_interval: Duration::from_millis(300),
+    guide: include_str!("../GUIDE.md"),
   };
 
   type Extra = Extra;

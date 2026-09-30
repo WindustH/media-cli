@@ -79,6 +79,7 @@ impl Platform for Zhihu {
       ..Choices::NONE
     },
     min_interval: Duration::from_millis(600),
+    guide: include_str!("../GUIDE.md"),
   };
 
   type Extra = Extra;

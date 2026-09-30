@@ -127,6 +127,19 @@ media youtube download https://www.youtube.com/shorts/fwBIZRq-vzY
 `bili`、`xhs`、`twitter`、`zhihu`、`reddit` 或 `youtube`，就能省掉平台名：
 `ln -s $(which media) ~/.local/bin/bili`。
 
+## 文档
+
+完整的使用文档内置在程序里：
+
+```sh
+media guide                 # 主题列表：start、login、refs、output、analysis、download ...
+media guide analysis        # 创作者数据、导出、定时快照
+media guide bili            # 单个平台：命令、引用格式、登录、限制
+media bili search --help    # 单个命令的选项和示例
+```
+
+（内置文档为英文。）
+
 ## 须知
 
 - `MEDIA_<平台>_COOKIE`（例如 `MEDIA_BILI_COOKIE`）可以临时提供 Cookie 而不保存。

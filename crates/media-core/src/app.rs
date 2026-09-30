@@ -15,6 +15,7 @@ use comfy_table::{Attribute, Cell, CellAlignment, ContentArrangement, Table, pre
 use serde_json::json;
 
 use crate::cli::{self, GlobalArgs};
+use crate::guide;
 use crate::model::Data;
 use crate::output::{self, Format};
 use crate::platform::{Cap, Platform, PlatformInfo};
@@ -73,8 +74,15 @@ impl App {
       .long_about(None)
       .subcommand_required(true)
       .arg_required_else_help(true)
+      .after_help("Guides: `media guide` lists topics (start, login, analysis ...) and platforms.")
       .subcommand(
         clap::Command::new("platforms").about("List platforms and what each one supports"),
+      )
+      .subcommand(
+        clap::Command::new("guide")
+          .about("Read the built-in documentation: `media guide`, `media guide analysis`, `media guide bili`")
+          .visible_alias("docs")
+          .arg(clap::Arg::new("topic").help("A topic or a platform; omit to list them")),
       );
     for e in &self.platforms {
       cmd = cmd.subcommand((e.command)());
@@ -110,6 +118,9 @@ impl App {
       self.print_platforms(global.output_format());
       return ExitCode::SUCCESS;
     }
+    if name == "guide" {
+      return self.print_guide(sub.get_one::<String>("topic").map(String::as_str));
+    }
     let Some(entry) = self.find(name) else {
       return ExitCode::FAILURE;
     };
@@ -124,6 +135,27 @@ impl App {
       }
     };
     runtime.block_on((entry.run)(global, sub.clone()))
+  }
+
+  fn print_guide(&self, topic: Option<&str>) -> ExitCode {
+    let Some(topic) = topic else {
+      let platforms: Vec<_> = self
+        .platforms
+        .iter()
+        .map(|e| (e.info.id, e.info.name))
+        .collect();
+      guide::print(&guide::index(&platforms));
+      return ExitCode::SUCCESS;
+    };
+    if let Some(t) = guide::TOPICS.iter().find(|t| t.name == topic) {
+      guide::print(t.body);
+    } else if let Some(e) = self.find(topic) {
+      guide::print(&guide::platform(&e.info, &(e.command)()));
+    } else {
+      eprintln!("error: no guide topic `{topic}`; `media guide` lists them");
+      return ExitCode::from(2);
+    }
+    ExitCode::SUCCESS
   }
 
   fn print_platforms(&self, format: Format) {

@@ -178,6 +178,7 @@ pub struct DownloadArgs {
 #[derive(Debug, Subcommand)]
 pub enum CommonCommand {
   /// Log in and save the session
+  #[command(after_long_help = EX_LOGIN)]
   Login(LoginArgs),
   /// Forget the saved session
   Logout,
@@ -186,6 +187,7 @@ pub enum CommonCommand {
   /// Show the logged-in account
   Whoami,
   /// Search posts, users or topics
+  #[command(after_long_help = EX_SEARCH)]
   Search(SearchArgs),
   /// Trending content
   Hot {
@@ -205,6 +207,7 @@ pub enum CommonCommand {
   #[command(visible_alias = "show")]
   Read { post: String },
   /// Comments of a post
+  #[command(after_long_help = EX_COMMENTS)]
   Comments {
     post: String,
     #[arg(short, long)]
@@ -231,6 +234,7 @@ pub enum CommonCommand {
     page: PageArgs,
   },
   /// Creator analytics of your account, or of one of your posts
+  #[command(after_long_help = EX_INSIGHTS)]
   Insights {
     post: Option<String>,
     /// Days of history for trends
@@ -247,7 +251,7 @@ pub enum CommonCommand {
   /// Show a user profile
   User { user: String },
   /// Posts of a user (yours when USER is omitted)
-  #[command(visible_alias = "posts")]
+  #[command(visible_alias = "posts", after_long_help = EX_USER_POSTS)]
   UserPosts {
     user: Option<String>,
     #[command(flatten)]
@@ -350,7 +354,7 @@ pub enum CommonCommand {
   /// Unfollow a user
   Unfollow { user: String },
   /// Publish a post
-  #[command(name = "post", visible_alias = "publish")]
+  #[command(name = "post", visible_alias = "publish", after_long_help = EX_POST)]
   Publish(PublishArgs),
   /// Delete one of your posts
   Delete {
@@ -359,6 +363,7 @@ pub enum CommonCommand {
     yes: bool,
   },
   /// Download the images / video / audio of a post
+  #[command(after_long_help = EX_DOWNLOAD)]
   Download(DownloadArgs),
 }
 
@@ -370,3 +375,74 @@ fn dedup<T: Keyed>(mut page: Page<T>) -> Page<T> {
     .retain(|i| i.key().is_empty() || seen.insert(i.key().to_owned()));
   page
 }
+
+// ── examples for `--help` ────────────────────────────────────────────────
+
+const EX_LOGIN: &str = "\
+Examples:
+  media bili login                      # QR code for the Bilibili app
+  media x login --browser               # reuse a logged-in browser
+  media x login --browser firefox
+  media zhihu login --cookie 'z_c0=...; _xsrf=...'
+
+More: media guide login";
+
+const EX_SEARCH: &str = "\
+Examples:
+  media bili search \"rust 教程\" -n 10
+  media yt search \"rust\" --sort popularity --filter week
+  media xhs search 咖啡 --sort popular --filter video
+  media x search \"AI agent\" --sort latest --since 1d -f csv > tweets.csv
+  media bili search 影视飓风 -t user
+  media zhihu search rust -t topic
+
+Values of --sort / --filter differ per platform: see `media guide <platform>`.";
+
+const EX_COMMENTS: &str = "\
+Examples:
+  media bili comments BV1xx411c7mD -n 50
+  media bili comments '#1' --sort time
+  media reddit comments 1wsxldl --all --replies -f jsonl > thread.jsonl
+  media yt comments dQw4w9WgXcQ -n 500 --since 30d -f csv > comments.csv
+
+--all fetches every comment; --replies also every reply under each (CSV and
+JSON Lines rows carry depth and parent_id). More: media guide analysis";
+
+const EX_INSIGHTS: &str = "\
+Examples:
+  media bili insights                   # your account, last 30 days
+  media bili insights --days 7 -f csv > week.csv
+  media bili insights BV1xx411c7mD      # one of your videos
+  media x insights 2104695667180380260  # one of your tweets
+
+Totals, daily series and breakdowns (traffic sources, audience ...); warnings
+say what a platform withholds. Others' posts get public counters.
+More: media guide analysis, media guide <platform>";
+
+const EX_USER_POSTS: &str = "\
+Examples:
+  media bili user-posts 946974 -n 100 --since 90d -f csv > videos.csv
+  media x user-posts NASA -n 50
+  media yt user-posts @NASA -n 20
+  media bili user-posts                 # your own videos";
+
+const EX_POST: &str = "\
+Examples:
+  media x post \"Hello\" -i photo.jpg
+  media x post \"Nice!\" --reply-to 2104695667180380260
+  media zhihu post \"今天的想法\" -i a.png -i b.png
+  media xhs post \"正文 #话题\" --title 标题 -i cover.jpg
+  media reddit post \"Body text\" --title Title --topic r/test
+  cat draft.md | media bili post -
+
+What `post` creates differs per platform: see `media guide interact`.";
+
+const EX_DOWNLOAD: &str = "\
+Examples:
+  media bili download BV1xx411c7mD -o ~/Videos
+  media bili download BV1xx411c7mD --audio-only --split 25
+  media xhs download '#1'
+  media yt download dQw4w9WgXcQ --audio-only
+
+Needs ffmpeg for merging video and audio, audio extraction and --split.
+More: media guide download";

@@ -137,6 +137,17 @@ Each platform also answers to shorter names (`bilibili`, `x`, `xiaohongshu`,
 `zh`, `rd`, `yt` ...). Link the binary as `bili`, `xhs`, `twitter`, `zhihu`,
 `reddit` or `youtube` to skip the platform word entirely: `ln -s $(which media) ~/.local/bin/bili`.
 
+## Documentation
+
+Everything is documented inside the binary:
+
+```sh
+media guide                 # topics: start, login, refs, output, analysis, download ...
+media guide analysis        # creator insights, exports, snapshots
+media guide bili            # one platform: commands, references, login, limits
+media bili search --help    # a command's options, with examples
+```
+
 ## Good to know
 
 - `MEDIA_<PLATFORM>_COOKIE` (for example `MEDIA_BILI_COOKIE`) supplies a cookie

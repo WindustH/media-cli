@@ -172,6 +172,9 @@ pub struct PlatformInfo {
   pub choices: Choices,
   /// Minimum gap between requests (anti-bot pacing); zero disables it.
   pub min_interval: Duration,
+  /// Markdown notes appended to the generated `media guide <id>` topic:
+  /// reference formats, login notes, analytics, limits.
+  pub guide: &'static str,
 }
 
 impl PlatformInfo {

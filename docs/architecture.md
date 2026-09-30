@@ -35,6 +35,7 @@ line in `src/main.rs`.
 | `paging` | `collect`: follow cursors until `--limit` items; `collect_window`: `--since` / `--until` |
 | `download` | save media, merge DASH audio/video, audio-only, WAV segments (ffmpeg) |
 | `file` | format detection by magic bytes, images to upload |
+| `guide` | `media guide`: topics from `crates/media-core/guide/*.md`, platform topics generated from the command set plus each crate's `GUIDE.md` |
 | `output` | human tables/cards, the `{ok, schema_version, platform, fetched_at, data}` envelope, and flat JSON Lines / CSV rows |
 | `json` | `ValueExt`: dotted-path getters tolerant of upstream quirks (`v.str("a.b.0")`, `v.count("stat.like")`) |
 | `text` | counts (`1.2万`), durations, truncation, HTML to text, timestamps |

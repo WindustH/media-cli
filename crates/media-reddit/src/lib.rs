@@ -86,6 +86,7 @@ impl Platform for Reddit {
       notification_kind: inbox::KINDS,
     },
     min_interval: Duration::from_millis(1000),
+    guide: include_str!("../GUIDE.md"),
   };
 
   type Extra = extra::Command;

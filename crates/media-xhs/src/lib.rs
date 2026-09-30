@@ -82,6 +82,7 @@ impl Platform for Xhs {
       notification_kind: inbox::KINDS,
     },
     min_interval: Duration::from_secs(1),
+    guide: include_str!("../GUIDE.md"),
   };
 
   type Extra = extra::XhsCommand;
