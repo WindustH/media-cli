@@ -1,7 +1,7 @@
 //! Writing: likes, bookmarks, retweets, posting / replying / quoting,
 //! deleting and following. Every write pauses briefly first.
 
-use media_core::{Action, Draft, Error, Result, Value, ValueExt, json};
+use media_core::{Action, Draft, Error, Reply, Result, Value, ValueExt, json};
 
 use crate::api::{Api, REST};
 use crate::graphql::{
@@ -152,13 +152,15 @@ pub async fn publish(api: &Api, draft: &Draft) -> Result<Action> {
 }
 
 /// Reply to `post`, or to one of its replies (`reply_to`).
-pub async fn reply(api: &Api, post: &str, text: &str, reply_to: Option<&str>) -> Result<Action> {
-  let target = refs::tweet_id(reply_to.unwrap_or(post))?;
+/// A reply tweet under the post, or under one of its replies.
+pub async fn reply(api: &Api, post: &str, reply: &Reply) -> Result<Action> {
+  let target = refs::tweet_id(reply.reply_to.as_deref().unwrap_or(post))?;
   let links = Links {
     reply_to: Some(target.clone()),
     quote: None,
   };
-  let id = create(api, text, &[], &links).await?;
+  let media = upload_images(api, &reply.images).await?;
+  let id = create(api, &reply.text, &media, &links).await?;
   Ok(
     Action::done("comment", target)
       .with_id(&id)

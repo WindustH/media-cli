@@ -203,16 +203,11 @@ async fn upload_image(c: &Client, path: &Path) -> Result<String> {
     ("version", "1"),
     ("source", "web"),
   ];
-  let data = c
+  let permits = c
     .creator_get("/api/media/v1/upload/web/permit", &params)
     .await?;
-  let permit = data.at("uploadTempPermits.0");
-  let (Some(file_id), Some(token)) = (permit.str("fileIds.0"), permit.str("token")) else {
-    return Err(Error::upstream("upload permit without file id or token"));
-  };
   let image = Image::read(path).await?;
-  c.upload(&file_id, &token, image.data, image.mime).await?;
-  Ok(file_id)
+  c.upload(&permits, image.data, image.mime).await
 }
 
 // ── own notes ───────────────────────────────────────────────────────────

@@ -4,14 +4,18 @@ All of these need a login and act as your account.
 
     media <platform> like POST [--undo]          # unlike: `unlike POST`
     media <platform> favorite POST [--folder F] [--undo]
-    media <platform> comment POST "text" [--reply-to COMMENT]
+    media <platform> comment POST "text" [--reply-to COMMENT] [-i IMAGE ...]
     media <platform> delete-comment POST COMMENT [-y]
     media <platform> follow USER [--undo]        # unfollow: `unfollow USER`
     media <platform> post "text" [--title T] [-i IMAGE ...] [--topic T ...]
                          [--reply-to POST] [--quote POST]
     media <platform> delete POST [-y]
 
-- `post -` reads the text from stdin: `cat draft.md | media zhihu post -`.
+- `post -` and `comment POST -` read the text from stdin:
+  `cat draft.md | media zhihu post -`.
+- `comment -i` attaches images where the platform takes them (Xiaohongshu,
+  Twitter / X; `comment-images` in `media platforms`); the text may then be
+  left out.
 - `delete` and `delete-comment` ask for confirmation on a terminal; scripts
   pass `-y`.
 - The result is an Action with the id and link of anything created.

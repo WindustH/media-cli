@@ -10,7 +10,7 @@ use crate::download::{self, DownloadOpts};
 use crate::error::{Error, Result};
 use crate::model::{Comment, Data};
 use crate::paging::collect;
-use crate::platform::{Cap, Draft, Platform, Query};
+use crate::platform::{Cap, Draft, Platform, Query, Reply};
 
 fn confirm(yes: bool, what: &str) -> Result<()> {
   if yes {
@@ -239,10 +239,24 @@ pub(super) async fn common<P: Platform>(
       post,
       text,
       reply_to,
-    } => ok(Data::Action(
-      p.comment(&ctx.post_ref(&post)?, &text, reply_to.as_deref())
-        .await?,
-    )),
+      images,
+    } => {
+      if !images.is_empty() && !P::INFO.supports(Cap::CommentImages) {
+        return Err(Error::unsupported("comment --image"));
+      }
+      check_images(&images)?;
+      let reply = Reply {
+        text: read_text(text)?,
+        reply_to,
+        images,
+      };
+      if reply.text.is_empty() && reply.images.is_empty() {
+        return Err(Error::input("nothing to send: give a text or --image"));
+      }
+      ok(Data::Action(
+        p.comment(&ctx.post_ref(&post)?, &reply).await?,
+      ))
+    }
     C::DeleteComment { post, comment, yes } => {
       confirm(yes, &format!("delete comment {comment}"))?;
       ok(Data::Action(

@@ -331,12 +331,18 @@ pub enum CommonCommand {
     folder: Option<String>,
   },
   /// Comment on a post, or reply to one of its comments
+  #[command(after_long_help = EX_COMMENT)]
   Comment {
     post: String,
-    text: String,
+    /// Comment text; `-` reads it from stdin
+    #[arg(required_unless_present = "images")]
+    text: Option<String>,
     /// Reply to this comment id
     #[arg(long, value_name = "COMMENT")]
     reply_to: Option<String>,
+    /// Attach an image (repeatable)
+    #[arg(short = 'i', long = "image", value_name = "PATH")]
+    images: Vec<PathBuf>,
   },
   /// Delete one of your comments
   DeleteComment {
@@ -397,6 +403,15 @@ Examples:
   media zhihu search rust -t topic
 
 Values of --sort / --filter differ per platform: see `media guide <platform>`.";
+
+const EX_COMMENT: &str = "\
+Examples:
+  media bili comment BV1xx411c7mD '好耶'
+  media bili comment '#1' '同意' --reply-to 2384729384
+  media xhs comment '#2' '同款！' -i photo.jpg     # images where supported
+  media x comment '#1' -i chart.png
+
+`media platforms` lists where --image works (comment-images).";
 
 const EX_COMMENTS: &str = "\
 Examples:

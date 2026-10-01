@@ -28,8 +28,8 @@ use std::time::Duration;
 
 use media_core::{
   Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Error, Insights, Media,
-  Notification, Page, PageReq, Platform, PlatformInfo, Post, QrStatus, QrTicket, Query, Result,
-  User,
+  Notification, Page, PageReq, Platform, PlatformInfo, Post, QrStatus, QrTicket, Query, Reply,
+  Result, User,
 };
 
 use crate::refs::PostRef;
@@ -244,10 +244,10 @@ impl Platform for Bilibili {
     }
   }
 
-  async fn comment(&self, post: &str, text: &str, reply_to: Option<&str>) -> Result<Action> {
+  async fn comment(&self, post: &str, reply: &Reply) -> Result<Action> {
     self.ctx.require_login(api::LOGIN_COOKIES)?;
     let section = self.section(post).await?;
-    comment::add(&self.ctx, &section, text, reply_to).await
+    comment::add(&self.ctx, &section, &reply.text, reply.reply_to.as_deref()).await
   }
 
   async fn delete_comment(&self, post: &str, comment: &str) -> Result<Action> {

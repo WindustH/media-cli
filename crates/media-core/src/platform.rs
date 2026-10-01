@@ -43,6 +43,8 @@ pub enum Cap {
   Like,
   Favorite,
   Comment,
+  /// `comment --image`.
+  CommentImages,
   DeleteComment,
   Follow,
   Publish,
@@ -78,6 +80,7 @@ impl Cap {
     Cap::Like,
     Cap::Favorite,
     Cap::Comment,
+    Cap::CommentImages,
     Cap::DeleteComment,
     Cap::Follow,
     Cap::Publish,
@@ -113,6 +116,7 @@ impl Cap {
       Cap::Like => "like",
       Cap::Favorite => "favorite",
       Cap::Comment => "comment",
+      Cap::CommentImages => "comment-images",
       Cap::DeleteComment => "delete-comment",
       Cap::Follow => "follow",
       Cap::Publish => "post",
@@ -228,6 +232,16 @@ pub struct Draft {
   /// Post to quote / repost with comment.
   pub quote: Option<String>,
   pub topics: Vec<String>,
+}
+
+/// A comment to send. `images` stay empty unless the platform declares
+/// [`Cap::CommentImages`].
+#[derive(Debug, Clone, Default)]
+pub struct Reply {
+  pub text: String,
+  /// Comment of the post this one answers.
+  pub reply_to: Option<String>,
+  pub images: Vec<PathBuf>,
 }
 
 /// A started QR login: `url` is encoded into the QR code, `token` identifies it when polling.
@@ -403,7 +417,7 @@ pub trait Platform: Sized {
   }
 
   /// Comment on a post, or reply to one of its comments.
-  async fn comment(&self, post: &str, text: &str, reply_to: Option<&str>) -> Result<Action> {
+  async fn comment(&self, post: &str, reply: &Reply) -> Result<Action> {
     unsupported!("comment")
   }
 

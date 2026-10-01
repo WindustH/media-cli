@@ -24,7 +24,7 @@ use std::time::Duration;
 
 use media_core::{
   Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Error, Insights, Notification, Page,
-  PageReq, Platform, PlatformInfo, Post, QrStatus, QrTicket, Query, Result, User,
+  PageReq, Platform, PlatformInfo, Post, QrStatus, QrTicket, Query, Reply, Result, User,
 };
 
 pub use extra::Extra;
@@ -205,8 +205,9 @@ impl Platform for Zhihu {
     write::favorite(&self.ctx, &Target::parse(post)?, folder, undo).await
   }
 
-  async fn comment(&self, post: &str, text: &str, reply_to: Option<&str>) -> Result<Action> {
-    write::comment(&self.ctx, &Target::parse(post)?, text, reply_to).await
+  async fn comment(&self, post: &str, reply: &Reply) -> Result<Action> {
+    let target = Target::parse(post)?;
+    write::comment(&self.ctx, &target, &reply.text, reply.reply_to.as_deref()).await
   }
 
   async fn delete_comment(&self, post: &str, comment: &str) -> Result<Action> {

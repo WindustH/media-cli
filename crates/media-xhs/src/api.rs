@@ -149,19 +149,27 @@ impl Client {
     self.finish(req.send().await?).await
   }
 
-  /// PUT one file to the upload host with a permit token.
-  pub async fn upload(&self, file_id: &str, token: &str, data: Vec<u8>, mime: &str) -> Result<()> {
+  /// PUT one file with the first of the `uploadTempPermits` an upload
+  /// permit endpoint returned; the file id it was stored under comes back.
+  pub async fn upload(&self, permits: &Value, data: Vec<u8>, mime: &str) -> Result<String> {
+    let permit = permits.at("uploadTempPermits.0");
+    let (Some(file_id), Some(token)) = (permit.str("fileIds.0"), permit.str("token")) else {
+      return Err(Error::upstream("upload permit without file id or token"));
+    };
+    let host = permit
+      .str("uploadAddr")
+      .map_or_else(|| UPLOAD.to_owned(), |a| format!("https://{a}"));
     self
       .ctx
       .http
-      .request(media_core::http::Method::PUT, format!("{UPLOAD}/{file_id}"))
+      .request(media_core::http::Method::PUT, format!("{host}/{file_id}"))
       .header("x-cos-security-token", token)
       .bytes(data, mime)
       .no_cookies()
       .send()
       .await?
-      .check()
-      .map(drop)
+      .check()?;
+    Ok(file_id)
   }
 
   // ── cookies ──────────────────────────────────────────────────────────

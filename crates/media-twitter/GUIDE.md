@@ -28,7 +28,8 @@ behaviour" errors, code 226). Without a login, `user`, `read`,
 - `likers` works only on your own tweets (likes are private since 2024).
 - `reposts` lists quote tweets; `retweeters TWEET` lists who retweeted.
 - `retweet TWEET [--undo]`, `quote TWEET "text" [-i IMAGE]`.
-- `comment TWEET "text"` replies; `--reply-to` answers one of its replies.
+- `comment TWEET "text" [-i IMAGE ...]` replies; `--reply-to` answers one
+  of its replies.
 - `post "text" [-i IMAGE ...]` (up to four images), with `--reply-to` or
   `--quote`; `delete` and `delete-comment` delete your tweets.
 - `favorite` bookmarks; `folders` lists bookmark folders for

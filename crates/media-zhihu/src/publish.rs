@@ -36,10 +36,8 @@ impl Image {
 
 async fn upload(ctx: &Ctx, path: &Path, source: &str) -> Result<Image> {
   let file = media_core::file::Image::read(path).await?;
+  let (width, height) = file.size();
   let data = file.data;
-  let (width, height) = imagesize::blob_size(&data)
-    .map(|s| (s.width, s.height))
-    .unwrap_or((0, 0));
   let hash = format!("{:x}", Md5::digest(&data));
   let mut v = register(ctx, &hash, source).await?;
   match v.i64("upload_file.state") {

@@ -76,6 +76,13 @@ impl Image {
     })
   }
 
+  /// Width and height in pixels, `(0, 0)` when the header is unreadable.
+  pub fn size(&self) -> (usize, usize) {
+    imagesize::blob_size(&self.data)
+      .map(|s| (s.width, s.height))
+      .unwrap_or((0, 0))
+  }
+
   /// Extension matching the detected format.
   pub fn ext(&self) -> &str {
     self.name.rsplit_once('.').map(|(_, e)| e).unwrap_or("jpg")

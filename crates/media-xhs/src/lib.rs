@@ -28,7 +28,7 @@ use std::time::Duration;
 
 use media_core::{
   Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Insights, Notification, Page,
-  PageReq, Platform, PlatformInfo, Post, QrStatus, QrTicket, Query, Result, User,
+  PageReq, Platform, PlatformInfo, Post, QrStatus, QrTicket, Query, Reply, Result, User,
 };
 
 use api::Client;
@@ -66,6 +66,7 @@ impl Platform for Xhs {
       Cap::Like,
       Cap::Favorite,
       Cap::Comment,
+      Cap::CommentImages,
       Cap::DeleteComment,
       Cap::Follow,
       Cap::Publish,
@@ -194,8 +195,8 @@ impl Platform for Xhs {
     write::favorite(&self.client, post, folder, undo).await
   }
 
-  async fn comment(&self, post: &str, text: &str, reply_to: Option<&str>) -> Result<Action> {
-    write::comment(&self.client, post, text, reply_to).await
+  async fn comment(&self, post: &str, reply: &Reply) -> Result<Action> {
+    write::comment(&self.client, post, reply).await
   }
 
   async fn delete_comment(&self, post: &str, comment: &str) -> Result<Action> {

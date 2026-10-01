@@ -17,6 +17,7 @@ csv = "1"
 dirs = "6"
 futures-util = "0.3"
 html2text = "0.17"
+imagesize = "0.14"
 indicatif = "0.18"
 jiff.workspace = true
 libc = "0.2"

@@ -27,7 +27,7 @@ use std::time::Duration;
 
 use media_core::{
   Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Insights, Notification, Page,
-  PageReq, Platform, PlatformInfo, Post, Query, Result, User,
+  PageReq, Platform, PlatformInfo, Post, Query, Reply, Result, User,
 };
 
 use crate::api::Api;
@@ -66,6 +66,7 @@ impl Platform for Twitter {
       Cap::Like,
       Cap::Favorite,
       Cap::Comment,
+      Cap::CommentImages,
       Cap::DeleteComment,
       Cap::Follow,
       Cap::Publish,
@@ -188,8 +189,8 @@ impl Platform for Twitter {
     write::bookmark(&self.api, post, folder, undo).await
   }
 
-  async fn comment(&self, post: &str, text: &str, reply_to: Option<&str>) -> Result<Action> {
-    write::reply(&self.api, post, text, reply_to).await
+  async fn comment(&self, post: &str, reply: &Reply) -> Result<Action> {
+    write::reply(&self.api, post, reply).await
   }
 
   async fn delete_comment(&self, _post: &str, comment: &str) -> Result<Action> {
