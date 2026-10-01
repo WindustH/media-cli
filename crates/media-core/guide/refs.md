@@ -6,12 +6,15 @@ Commands take whatever the platform shows you: ids, links, short links, and
 the `url` field of any earlier result. Each platform guide lists its forms.
 
 After any list, `#N` (or a plain number of up to three digits) means the
-N-th item of that list, for posts and users separately:
+N-th item of that list, for posts, users and collections (folders, lists,
+activities) separately:
 
     media xhs search 咖啡
     media xhs read '#2'
     media xhs comments 2 -n 50
     media xhs user-posts '#1'           # after a user list
+    media bili collections
+    media bili favorites --folder '#1'  # after a folder list
 
 Quote `#N` in shells where `#` starts a comment.
 

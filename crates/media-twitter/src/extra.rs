@@ -4,7 +4,7 @@
 use std::path::PathBuf;
 
 use media_core::cli::PageArgs;
-use media_core::{Action, Data, Draft, Error, Result};
+use media_core::{Action, Data, Draft, Result};
 
 use crate::api::Api;
 use crate::{tweets, users, write};
@@ -77,12 +77,7 @@ pub async fn run(api: &Api, command: Command) -> Result<Data> {
 }
 
 async fn quote(api: &Api, post: &str, text: &str, images: &[PathBuf]) -> Result<Action> {
-  if let Some(missing) = images.iter().find(|i| !i.is_file()) {
-    return Err(Error::input(format!(
-      "image not found: {}",
-      missing.display()
-    )));
-  }
+  media_core::cli::check_images(images)?;
   let draft = Draft {
     text: text.to_owned(),
     images: images.to_vec(),

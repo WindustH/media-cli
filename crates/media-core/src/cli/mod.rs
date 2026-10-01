@@ -13,6 +13,7 @@ use std::process::ExitCode;
 use clap::{ArgMatches, FromArgMatches, Subcommand, builder::PossibleValuesParser};
 
 pub use self::args::*;
+pub use self::dispatch::{check_images, read_text};
 use crate::account;
 use crate::ctx::Ctx;
 use crate::error::{Error, Result};
@@ -187,6 +188,14 @@ async fn execute<P: Platform>(
         .items
         .iter()
         .map(|u| u.reference().to_owned())
+        .collect(),
+    ),
+    Data::Collections(page) => ctx.store.remember(
+      RefKind::Collection,
+      page
+        .items
+        .iter()
+        .map(|c| c.reference().to_owned())
         .collect(),
     ),
     _ => {}

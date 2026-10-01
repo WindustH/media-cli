@@ -1,6 +1,7 @@
 //! Running one shared command against a platform.
 
 use std::io::{IsTerminal, Read};
+use std::path::PathBuf;
 use std::process::ExitCode;
 
 use super::args::{CommonCommand, SearchKind};
@@ -28,7 +29,8 @@ fn confirm(yes: bool, what: &str) -> Result<()> {
   }
 }
 
-fn read_text(text: Option<String>) -> Result<String> {
+/// A text argument, or standard input for `-`.
+pub fn read_text(text: Option<String>) -> Result<String> {
   match text.as_deref() {
     Some("-") => {
       let mut buf = String::new();
@@ -37,6 +39,17 @@ fn read_text(text: Option<String>) -> Result<String> {
     }
     Some(t) => Ok(t.to_owned()),
     None => Ok(String::new()),
+  }
+}
+
+/// Fails on the first image path that is not a file.
+pub fn check_images(images: &[PathBuf]) -> Result<()> {
+  match images.iter().find(|i| !i.is_file()) {
+    Some(missing) => Err(Error::input(format!(
+      "image not found: {}",
+      missing.display()
+    ))),
+    None => Ok(()),
   }
 }
 
@@ -177,6 +190,7 @@ pub(super) async fn common<P: Platform>(
     }
     C::Favorites { user, folder, page } => {
       let user = user.map(|u| ctx.user_ref(&u)).transpose()?;
+      let folder = folder.map(|f| ctx.collection_ref(&f)).transpose()?;
       let (user, folder) = (user.as_deref(), folder.as_deref());
       ok(Data::Posts(
         page
@@ -207,14 +221,20 @@ pub(super) async fn common<P: Platform>(
     C::Unread => ok(Data::Counts(p.unread().await?)),
     C::Like { post, undo } => ok(Data::Action(p.like(&ctx.post_ref(&post)?, undo).await?)),
     C::Unlike { post } => ok(Data::Action(p.like(&ctx.post_ref(&post)?, true).await?)),
-    C::Favorite { post, folder, undo } => ok(Data::Action(
-      p.favorite(&ctx.post_ref(&post)?, folder.as_deref(), undo)
-        .await?,
-    )),
-    C::Unfavorite { post, folder } => ok(Data::Action(
-      p.favorite(&ctx.post_ref(&post)?, folder.as_deref(), true)
-        .await?,
-    )),
+    C::Favorite { post, folder, undo } => {
+      let folder = folder.map(|f| ctx.collection_ref(&f)).transpose()?;
+      ok(Data::Action(
+        p.favorite(&ctx.post_ref(&post)?, folder.as_deref(), undo)
+          .await?,
+      ))
+    }
+    C::Unfavorite { post, folder } => {
+      let folder = folder.map(|f| ctx.collection_ref(&f)).transpose()?;
+      ok(Data::Action(
+        p.favorite(&ctx.post_ref(&post)?, folder.as_deref(), true)
+          .await?,
+      ))
+    }
     C::Comment {
       post,
       text,
@@ -245,14 +265,7 @@ pub(super) async fn common<P: Platform>(
           "nothing to publish: give a text, --title or --image",
         ));
       }
-      for image in &draft.images {
-        if !image.is_file() {
-          return Err(Error::input(format!(
-            "image not found: {}",
-            image.display()
-          )));
-        }
-      }
+      check_images(&draft.images)?;
       ok(Data::Action(p.publish(&draft).await?))
     }
     C::Delete { post, yes } => {

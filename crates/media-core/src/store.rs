@@ -34,6 +34,7 @@ pub struct Session {
 pub enum RefKind {
   Post,
   User,
+  Collection,
 }
 
 impl RefKind {
@@ -41,6 +42,7 @@ impl RefKind {
     match self {
       RefKind::Post => "last-posts.json",
       RefKind::User => "last-users.json",
+      RefKind::Collection => "last-collections.json",
     }
   }
 }

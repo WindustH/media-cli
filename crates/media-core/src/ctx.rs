@@ -82,6 +82,11 @@ impl Ctx {
     self.store.resolve(RefKind::User, arg)
   }
 
+  /// Resolve `#N` against the last printed list of topics, folders, lists ...
+  pub fn collection_ref(&self, arg: &str) -> Result<String> {
+    self.store.resolve(RefKind::Collection, arg)
+  }
+
   /// Fail with `not_authenticated` (and a login hint) unless these cookies are present.
   pub fn require_login(&self, required: &[&str]) -> Result<()> {
     match required.iter().find(|c| !self.http.has_cookie(c)) {

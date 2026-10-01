@@ -11,6 +11,7 @@ use media_core::{
 };
 
 use crate::api::Client;
+use crate::events::Association;
 use crate::refs::{self, note_url};
 use crate::{parse, stats};
 
@@ -21,6 +22,9 @@ const CREATOR_PAGE: [(&str, &str); 2] = [
 ];
 const DELETE: &str = "/web_api/sns/capa/postgw/note/delete";
 const PUBLISH: &str = "/web_api/sns/v2/note";
+const SOURCE: &str = r#"{"type":"web","ids":"","extraInfo":"{\"subType\":\"official\"}"}"#;
+// Python's default `json.dumps` spacing, as the reference sends it.
+const BINDS: &str = r#"{"version": 1, "noteId": 0, "noteOrderBind": {}, "notePostTiming": {"postTime": null}, "noteCollectionBind": {"id": ""}}"#;
 
 // ── search ──────────────────────────────────────────────────────────────
 
@@ -81,6 +85,15 @@ fn numbered<T>(items: Vec<T>, page: u64, size: usize) -> Page<T> {
 
 /// Publish an image note: upload each image, resolve topics, post.
 pub async fn publish(c: &Client, draft: &Draft) -> Result<Action> {
+  publish_note(c, draft, None).await
+}
+
+/// Publish an image note, joined to an activity-center activity when given.
+pub async fn publish_note(
+  c: &Client,
+  draft: &Draft,
+  event: Option<&Association>,
+) -> Result<Action> {
   if draft.images.is_empty() {
     return Err(Error::input(
       "a Xiaohongshu note needs at least one image (--image)",
@@ -94,8 +107,14 @@ pub async fn publish(c: &Client, draft: &Draft) -> Result<Action> {
   for path in &draft.images {
     file_ids.push(upload_image(c, path).await?);
   }
-  let mut hash_tag = Vec::new();
+  let mut hash_tag: Vec<Value> = event.map(|e| e.topics.clone()).unwrap_or_default();
   for name in topic_names(draft) {
+    if hash_tag
+      .iter()
+      .any(|t| t.str("name").as_deref() == Some(name.as_str()))
+    {
+      continue;
+    }
     let data = topic_search(c, &name, 1, 20).await?;
     if let Some(first) = topic_rows(&data).first() {
       hash_tag.push(json!({
@@ -109,15 +128,35 @@ pub async fn publish(c: &Client, draft: &Draft) -> Result<Action> {
     .iter()
     .map(|id| json!({"file_id": id, "metadata": {"source": -1}}))
     .collect();
+  let (desc, source, binds) = match event {
+    None => (draft.text.clone(), SOURCE.to_owned(), BINDS.to_owned()),
+    Some(e) => (
+      // The publish page writes the activity's topics into the text too.
+      e.topics
+        .iter()
+        .filter_map(|t| t.str("name"))
+        .fold(draft.text.clone(), |d, n| format!("{d} #{n}[话题]#")),
+      e.source(),
+      json!({
+        "version": 1,
+        "noteId": 0,
+        "bizType": 0,
+        "noteOrderBind": {},
+        "notePostTiming": {"postTime": null},
+        "noteCollectionBind": {"id": ""},
+        "optionRelationList": [e.relation],
+      })
+      .to_string(),
+    ),
+  };
   let body = json!({
     "common": {
       "type": "normal",
       "title": draft.title.as_deref().unwrap_or_default(),
       "note_id": "",
-      "desc": draft.text,
-      "source": r#"{"type":"web","ids":"","extraInfo":"{\"subType\":\"official\"}"}"#,
-      // Python's default `json.dumps` spacing, as the reference sends it.
-      "business_binds": r#"{"version": 1, "noteId": 0, "noteOrderBind": {}, "notePostTiming": {"postTime": null}, "noteCollectionBind": {"id": ""}}"#,
+      "desc": desc.trim_start(),
+      "source": source,
+      "business_binds": binds,
       "ats": [],
       "hash_tag": hash_tag,
       "post_loc": {},

@@ -50,6 +50,23 @@ follows; `active-fans` your most engaged fans; `my-notes` your notes.
 - `likers` and `reposts` do not exist on Xiaohongshu; who liked your notes
   shows in `notifications --type likes`.
 
+## Activity center
+
+The creator center's activities (活动中心): official campaigns with rewards
+for notes about their topic.
+
+- `events [KEYWORD] [--kept] [--latest]` lists the running activities, or
+  those whose name, reward or topic contains KEYWORD; `--kept` only the ones
+  you kept.
+- `event EVENT` shows one: rewards, start and end, topics, links.
+- `keep-event EVENT [--undo]` keeps (收藏) an activity or drops it.
+- `join-event EVENT [TEXT] --title T -i IMAGE [--topic T]` publishes an
+  image note for the activity, as the publish page's 关联活动 does: the
+  activity's topics are added to the note and the note is linked to the
+  activity. One activity per note.
+
+EVENT is `#N` of the last list, the activity id, its link, or its exact name.
+
 ## Downloads
 
 Images at full resolution (JPEG transcodes of the originals) and the best

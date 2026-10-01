@@ -208,6 +208,14 @@ impl User {
   }
 }
 
+impl Collection {
+  /// What other commands should receive to refer back to this collection:
+  /// folder options take ids, not links.
+  pub fn reference(&self) -> &str {
+    &self.id
+  }
+}
+
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct Comment {
   pub id: String,

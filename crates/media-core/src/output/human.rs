@@ -151,28 +151,30 @@ fn user_table(users: &[User]) {
 }
 
 fn collection_table(items: &[Collection]) {
-  let mut t = table(&[
-    "#",
-    "Name",
-    "Kind",
-    "Items",
-    "Followers",
-    "Description",
-    "ID",
-  ]);
+  // Counts most kinds lack (activities, folders of some platforms) stay out.
+  let items_col = items.iter().any(|c| c.items.is_some());
+  let followers_col = items.iter().any(|c| c.followers.is_some());
+  let mut header = vec!["#", "Name", "Kind"];
+  header.extend(items_col.then_some("Items"));
+  header.extend(followers_col.then_some("Followers"));
+  header.extend(["Description", "ID"]);
+  let mut t = table(&header);
   for (i, c) in items.iter().enumerate() {
-    t.add_row(vec![
+    let mut row = vec![
       index(i),
       Cell::new(truncate(&c.name, 32)),
       Cell::new(&c.kind),
-      num(c.items),
-      num(c.followers),
+    ];
+    row.extend(items_col.then(|| num(c.items)));
+    row.extend(followers_col.then(|| num(c.followers)));
+    row.extend([
       Cell::new(truncate(
         &one_line(c.description.as_deref().unwrap_or("")),
         40,
       )),
       Cell::new(&c.id).add_attribute(Attribute::Dim),
     ]);
+    t.add_row(row);
   }
   println!("{t}");
 }

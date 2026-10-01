@@ -8,6 +8,7 @@
 mod api;
 mod creator;
 mod discover;
+mod events;
 mod extra;
 mod inbox;
 mod insights;
