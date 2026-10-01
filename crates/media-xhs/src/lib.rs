@@ -66,7 +66,6 @@ impl Platform for Xhs {
       Cap::Like,
       Cap::Favorite,
       Cap::Comment,
-      Cap::CommentImages,
       Cap::DeleteComment,
       Cap::Follow,
       Cap::Publish,

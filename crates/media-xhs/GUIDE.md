@@ -45,12 +45,10 @@ follows; `active-fans` your most engaged fans; `my-notes` your notes.
 
 - `post` needs `--title` and at least one image (`-i`); `--topic` and
   `#tags` in the text become topics.
-- `comment NOTE "text" [--reply-to COMMENT] [-i IMAGE ...]`,
-  `delete-comment`, `like`, `favorite` (collect), `follow`, `delete` (your
-  note). Comment images are an app feature the website lacks: they are
-  uploaded like the app's and the comment is checked for them afterwards; if
-  Xiaohongshu drops them, the comment is removed again and the command fails.
-  Read comments carry their images in `extra.pictures`.
+- `comment NOTE "text" [--reply-to COMMENT]`, `delete-comment`, `like`,
+  `favorite` (collect), `follow`, `delete` (your note). Comments are text
+  only: images in comments are an app feature the web API ignores. Read
+  comments carry their images in `extra.pictures`.
 - `likers` and `reposts` do not exist on Xiaohongshu; who liked your notes
   shows in `notifications --type likes`.
 

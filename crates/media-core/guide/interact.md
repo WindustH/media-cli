@@ -13,9 +13,8 @@ All of these need a login and act as your account.
 
 - `post -` and `comment POST -` read the text from stdin:
   `cat draft.md | media zhihu post -`.
-- `comment -i` attaches images where the platform takes them (Xiaohongshu,
-  Twitter / X; `comment-images` in `media platforms`); the text may then be
-  left out.
+- `comment -i` attaches images where the platform takes them (Twitter / X;
+  `comment-images` in `media platforms`); the text may then be left out.
 - `delete` and `delete-comment` ask for confirmation on a terminal; scripts
   pass `-y`.
 - The result is an Action with the id and link of anything created.

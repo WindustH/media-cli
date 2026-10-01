@@ -408,8 +408,7 @@ const EX_COMMENT: &str = "\
 Examples:
   media bili comment BV1xx411c7mD '好耶'
   media bili comment '#1' '同意' --reply-to 2384729384
-  media xhs comment '#2' '同款！' -i photo.jpg     # images where supported
-  media x comment '#1' -i chart.png
+  media x comment '#1' 'Numbers for this week' -i chart.png
 
 `media platforms` lists where --image works (comment-images).";
 
